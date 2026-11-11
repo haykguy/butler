@@ -105,7 +105,7 @@ Most accountability tools confuse **rudeness** with **persistence**. Butler give
 - **Private & safe by default:** All state stays local per Hermes profile, private DM history capture is **OFF by default** behind two independent switches, secrets are never requested in chat, and **Master Pause** freezes outreach in one click.
 
 <p align="center">
-  <img src="assets/desktop-control-center.svg" alt="Butler Proactive Assistant sidebar tab inside Hermes Desktop" width="100%"/>
+  <img src="assets/desktop-control-center.png" alt="Butler sidebar tab inside Hermes Desktop" width="100%"/>
 </p>
 
 ---

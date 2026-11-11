@@ -157,6 +157,6 @@ export default {
   id: 'butler', name: 'Proactive Assistant', defaultEnabled: false,
   register(ctx) {
     ctx.register({ id: 'page', area: ROUTES_AREA, data: { path: '/proactive-assistant' }, render: () => h(ProfilePage, { ctx }) });
-    ctx.register({ id: 'nav', area: SIDEBAR_NAV_AREA, data: { path: '/proactive-assistant', label: 'Proactive Assistant', codicon: 'sparkle' } });
+    ctx.register({ id: 'nav', area: SIDEBAR_NAV_AREA, data: { path: '/proactive-assistant', label: 'Butler', codicon: 'sparkle' } });
   },
 };
