@@ -1,0 +1,114 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 440" width="1200" height="440" role="img" aria-label="Four ways Butler turns Hermes into a proactive personal assistant">
+  <defs>
+    <linearGradient id="bgGrad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#12110e"/>
+      <stop offset="100%" stop-color="#24211b"/>
+    </linearGradient>
+    <linearGradient id="emeraldGlow" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#b8964f" stop-opacity="0.24"/>
+      <stop offset="100%" stop-color="#b8964f" stop-opacity="0.04"/>
+    </linearGradient>
+    <linearGradient id="roseGlow" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#9e3b3b" stop-opacity="0.24"/>
+      <stop offset="100%" stop-color="#9e3b3b" stop-opacity="0.04"/>
+    </linearGradient>
+    <linearGradient id="amberGlow" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#c9a961" stop-opacity="0.24"/>
+      <stop offset="100%" stop-color="#c9a961" stop-opacity="0.04"/>
+    </linearGradient>
+    <linearGradient id="skyGlow" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#c9a961" stop-opacity="0.24"/>
+      <stop offset="100%" stop-color="#c9a961" stop-opacity="0.04"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="1200" height="440" rx="20" fill="url(#bgGrad)"/>
+  <rect x="1" y="1" width="1198" height="438" rx="19" fill="none" stroke="#3a352b" stroke-width="1.5"/>
+
+  <text x="600" y="45" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, sans-serif" font-size="22" font-weight="700" fill="#faf6ee">How Butler Turns Hermes Into a Proactive Personal Assistant</text>
+  <text x="600" y="71" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, sans-serif" font-size="14" fill="#a89e8a">Most AI waits for a prompt — Butler initiates, reacts to live events, escalates when urgent, and adapts to you</text>
+
+  <!-- Step 1: Proactive Follow-Through & Accountability -->
+  <g transform="translate(32, 98)">
+    <rect width="268" height="310" rx="16" fill="#1a1814" stroke="#b8964f" stroke-opacity="0.5" stroke-width="1.5"/>
+    <rect x="16" y="16" width="236" height="66" rx="12" fill="url(#emeraldGlow)"/>
+    <circle cx="48" cy="49" r="19" fill="#b8964f" fill-opacity="0.2" stroke="#d4b978" stroke-width="2"/>
+    <path d="M39 49 L45 55 L57 42" fill="none" stroke="#d4b978" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+    <text x="78" y="44" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="11.5" font-weight="700" fill="#d4b978" letter-spacing="0.8">STEP 1 · INITIATIVE</text>
+    <text x="78" y="64" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="15.5" font-weight="700" fill="#faf6ee">Texts You First</text>
+
+    <text x="20" y="112" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="13.5" fill="#d9cfbb">Remembers everything you</text>
+    <text x="20" y="132" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="13.5" fill="#d9cfbb">commit to, acts on your behalf,</text>
+    <text x="20" y="152" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="13.5" fill="#d9cfbb">and keeps you accountable.</text>
+
+    <rect x="18" y="176" width="232" height="114" rx="10" fill="#0f0e0b" stroke="#24211b"/>
+    <text x="30" y="200" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="12" font-weight="600" fill="#d4b978">Proactive Follow-Through:</text>
+    <text x="30" y="222" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="12.5" fill="#ece4d2">• Tracks goals &amp; daily habits</text>
+    <text x="30" y="243" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="12.5" fill="#ece4d2">• Preps work before texting you</text>
+    <text x="30" y="264" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="12.5" fill="#ece4d2">• Survives /new chats &amp; restarts</text>
+  </g>
+
+  <!-- Step 2: Urgent Calls & Webhook Actions -->
+  <g transform="translate(321, 98)">
+    <rect width="268" height="310" rx="16" fill="#1a1814" stroke="#9e3b3b" stroke-opacity="0.5" stroke-width="1.5"/>
+    <rect x="16" y="16" width="236" height="66" rx="12" fill="url(#roseGlow)"/>
+    <circle cx="48" cy="49" r="19" fill="#9e3b3b" fill-opacity="0.2" stroke="#b85c5c" stroke-width="2"/>
+    <path d="M50 38 L42 50 H49 L46 60 L55 47 H48 Z" fill="#b85c5c"/>
+    <text x="78" y="44" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="11.5" font-weight="700" fill="#b85c5c" letter-spacing="0.8">STEP 2 · LIVE ACTION</text>
+    <text x="78" y="64" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="15.5" font-weight="700" fill="#faf6ee">Calls &amp; Webhooks</text>
+
+    <text x="20" y="112" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="13.5" fill="#d9cfbb">Reacts the second live data</text>
+    <text x="20" y="132" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="13.5" fill="#d9cfbb">arrives — and calls your phone</text>
+    <text x="20" y="152" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="13.5" fill="#d9cfbb">when something can't wait.</text>
+
+    <rect x="18" y="176" width="232" height="114" rx="10" fill="#0f0e0b" stroke="#24211b"/>
+    <text x="30" y="200" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="12" font-weight="600" fill="#b85c5c">Real-Time Escalation:</text>
+    <text x="30" y="222" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="12.5" fill="#ece4d2">• Instant action on webhooks</text>
+    <text x="30" y="243" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="12.5" fill="#ece4d2">• Calls you on urgent events</text>
+    <text x="30" y="264" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="12.5" fill="#ece4d2">• Call back &amp; live file watches</text>
+  </g>
+
+  <!-- Step 3: Time Awareness & Signal Control -->
+  <g transform="translate(610, 98)">
+    <rect width="268" height="310" rx="16" fill="#1a1814" stroke="#c9a961" stroke-opacity="0.5" stroke-width="1.5"/>
+    <rect x="16" y="16" width="236" height="66" rx="12" fill="url(#amberGlow)"/>
+    <circle cx="48" cy="49" r="19" fill="#c9a961" fill-opacity="0.2" stroke="#e0c27a" stroke-width="2"/>
+    <line x1="48" y1="49" x2="48" y2="38" stroke="#e0c27a" stroke-width="2.2" stroke-linecap="round"/>
+    <line x1="48" y1="49" x2="57" y2="53" stroke="#e0c27a" stroke-width="2.2" stroke-linecap="round"/>
+    <text x="78" y="44" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="11.5" font-weight="700" fill="#e0c27a" letter-spacing="0.8">STEP 3 · REAL CLOCK</text>
+    <text x="78" y="64" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="15.5" font-weight="700" fill="#faf6ee">Knows Your Time</text>
+
+    <text x="20" y="112" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="13.5" fill="#d9cfbb">Understands your local clock,</text>
+    <text x="20" y="132" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="13.5" fill="#d9cfbb">how long you were away, and</text>
+    <text x="20" y="152" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="13.5" fill="#d9cfbb">keeps robot chatter out.</text>
+
+    <rect x="18" y="176" width="232" height="114" rx="10" fill="#0f0e0b" stroke="#24211b"/>
+    <text x="30" y="200" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="12" font-weight="600" fill="#e0c27a">Human Timing &amp; Signal:</text>
+    <text x="30" y="222" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="12.5" fill="#ece4d2">• Local timezone &amp; gap tracking</text>
+    <text x="30" y="243" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="12.5" fill="#ece4d2">• Respects sleep / Quiet Hours</text>
+    <text x="30" y="264" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="12.5" fill="#ece4d2">• Mutes rate-limit &amp; tool spam</text>
+  </g>
+
+  <!-- Step 4: Custom Coaching Dial -->
+  <g transform="translate(899, 98)">
+    <rect width="268" height="310" rx="16" fill="#1a1814" stroke="#c9a961" stroke-opacity="0.5" stroke-width="1.5"/>
+    <rect x="16" y="16" width="236" height="66" rx="12" fill="url(#skyGlow)"/>
+    <circle cx="48" cy="49" r="19" fill="#c9a961" fill-opacity="0.2" stroke="#c9a961" stroke-width="2"/>
+    <line x1="39" y1="44" x2="57" y2="44" stroke="#c9a961" stroke-width="2" stroke-linecap="round"/>
+    <circle cx="45" cy="44" r="3" fill="#faf6ee"/>
+    <line x1="39" y1="54" x2="57" y2="54" stroke="#c9a961" stroke-width="2" stroke-linecap="round"/>
+    <circle cx="52" cy="54" r="3" fill="#faf6ee"/>
+    <text x="78" y="44" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="11.5" font-weight="700" fill="#c9a961" letter-spacing="0.8">STEP 4 · YOUR TERMS</text>
+    <text x="78" y="64" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="15.5" font-weight="700" fill="#faf6ee">Coaching Dials</text>
+
+    <text x="20" y="112" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="13.5" fill="#d9cfbb">Tune how warm or strict it</text>
+    <text x="20" y="132" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="13.5" fill="#d9cfbb">speaks, separate from how</text>
+    <text x="20" y="152" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="13.5" fill="#d9cfbb">relentlessly it follows up.</text>
+
+    <rect x="18" y="176" width="232" height="114" rx="10" fill="#0f0e0b" stroke="#24211b"/>
+    <text x="30" y="200" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="12" font-weight="600" fill="#c9a961">Two Separate Sliders:</text>
+    <text x="30" y="222" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="12.5" fill="#ece4d2">• Tone: Gentle → Strict</text>
+    <text x="30" y="243" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="12.5" fill="#ece4d2">• Follow-Up: Minimal → Persistent</text>
+    <text x="30" y="264" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="12.5" fill="#ece4d2">• Desktop UI &amp; Master Pause</text>
+  </g>
+</svg>

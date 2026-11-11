@@ -1,124 +1,124 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 660" width="1200" height="660" role="img" aria-label="Butler technical system architecture diagram">
   <defs>
     <linearGradient id="archBg" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0%" stop-color="#090d16"/>
-      <stop offset="100%" stop-color="#111827"/>
+      <stop offset="0%" stop-color="#0a0908"/>
+      <stop offset="100%" stop-color="#14130f"/>
     </linearGradient>
     <marker id="arrowSky" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-      <path d="M 0 1 L 10 5 L 0 9 z" fill="#38bdf8"/>
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#c9a961"/>
     </marker>
     <marker id="arrowEmerald" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-      <path d="M 0 1 L 10 5 L 0 9 z" fill="#34d399"/>
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#d4b978"/>
     </marker>
     <marker id="arrowAmber" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-      <path d="M 0 1 L 10 5 L 0 9 z" fill="#fbbf24"/>
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#e0c27a"/>
     </marker>
     <marker id="arrowViolet" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-      <path d="M 0 1 L 10 5 L 0 9 z" fill="#a78bfa"/>
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#e8dcc4"/>
     </marker>
   </defs>
 
-  <rect width="1200" height="660" rx="18" fill="url(#archBg)" stroke="#334155" stroke-width="1.5"/>
-  <text x="600" y="40" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="20" font-weight="700" fill="#f8fafc">Butler System Architecture — 100% Public Hermes SDK Surfaces</text>
-  <text x="600" y="63" text-anchor="middle" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="12" fill="#94a3b8">Zero private core imports · Zero runtime monkey-patches · Profile-isolated storage · Fail-closed session boundaries</text>
+  <rect width="1200" height="660" rx="18" fill="url(#archBg)" stroke="#3a352b" stroke-width="1.5"/>
+  <text x="600" y="40" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="20" font-weight="700" fill="#faf6ee">Butler System Architecture — 100% Public Hermes SDK Surfaces</text>
+  <text x="600" y="63" text-anchor="middle" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="12" fill="#a89e8a">Zero private core imports · Zero runtime monkey-patches · Profile-isolated storage · Fail-closed session boundaries</text>
 
   <!-- Column 1: Hermes Host & Gateway -->
-  <rect x="28" y="86" width="320" height="546" rx="14" fill="#0f172a" stroke="#38bdf8" stroke-opacity="0.45" stroke-width="1.5"/>
-  <text x="48" y="116" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="13" font-weight="700" fill="#38bdf8" letter-spacing="0.8">HERMES CORE &amp; CHANNELS (&gt;=0.23.1)</text>
+  <rect x="28" y="86" width="320" height="546" rx="14" fill="#12110e" stroke="#c9a961" stroke-opacity="0.45" stroke-width="1.5"/>
+  <text x="48" y="116" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="13" font-weight="700" fill="#c9a961" letter-spacing="0.8">HERMES CORE &amp; CHANNELS (&gt;=0.23.1)</text>
 
-  <rect x="48" y="136" width="280" height="84" rx="10" fill="#162033" stroke="#334155"/>
-  <text x="64" y="160" font-family="ui-monospace, SFMono-Regular, monospace" font-size="12.5" font-weight="700" fill="#f8fafc">post_gateway_admission</text>
-  <text x="64" y="181" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="12" fill="#cbd5e1">• Lazy profile-scoped Runner init</text>
-  <text x="64" y="200" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="12" fill="#cbd5e1">• Admitted DM observation (dual-gated)</text>
+  <rect x="48" y="136" width="280" height="84" rx="10" fill="#1c1a15" stroke="#3a352b"/>
+  <text x="64" y="160" font-family="ui-monospace, SFMono-Regular, monospace" font-size="12.5" font-weight="700" fill="#faf6ee">post_gateway_admission</text>
+  <text x="64" y="181" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="12" fill="#d9cfbb">• Lazy profile-scoped Runner init</text>
+  <text x="64" y="200" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="12" fill="#d9cfbb">• Admitted DM observation (dual-gated)</text>
 
-  <rect x="48" y="238" width="280" height="96" rx="10" fill="#162033" stroke="#334155"/>
-  <text x="64" y="262" font-family="ui-monospace, SFMono-Regular, monospace" font-size="12.5" font-weight="700" fill="#f8fafc">pre_llm_call</text>
-  <text x="64" y="283" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="12" fill="#cbd5e1">• Primary turns only (skips subagents)</text>
-  <text x="64" y="302" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="12" fill="#cbd5e1">• Injects local wall clock, quiet state,</text>
-  <text x="64" y="319" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="12" fill="#cbd5e1">  session age &amp; exact elapsed turn gaps</text>
+  <rect x="48" y="238" width="280" height="96" rx="10" fill="#1c1a15" stroke="#3a352b"/>
+  <text x="64" y="262" font-family="ui-monospace, SFMono-Regular, monospace" font-size="12.5" font-weight="700" fill="#faf6ee">pre_llm_call</text>
+  <text x="64" y="283" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="12" fill="#d9cfbb">• Primary turns only (skips subagents)</text>
+  <text x="64" y="302" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="12" fill="#d9cfbb">• Injects local wall clock, quiet state,</text>
+  <text x="64" y="319" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="12" fill="#d9cfbb">  session age &amp; exact elapsed turn gaps</text>
 
-  <rect x="48" y="352" width="280" height="112" rx="10" fill="#162033" stroke="#334155"/>
-  <text x="64" y="376" font-family="ui-monospace, SFMono-Regular, monospace" font-size="12.5" font-weight="700" fill="#f8fafc">ctx.register_tool (4 Tools)</text>
-  <text x="64" y="398" font-family="ui-monospace, SFMono-Regular, monospace" font-size="11.5" fill="#38bdf8">• butler_controls</text>
-  <text x="64" y="417" font-family="ui-monospace, SFMono-Regular, monospace" font-size="11.5" fill="#38bdf8">• butler_create / butler_manage</text>
-  <text x="64" y="436" font-family="ui-monospace, SFMono-Regular, monospace" font-size="11.5" fill="#38bdf8">• butler_expression</text>
-  <text x="64" y="453" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="11.5" fill="#94a3b8">  (Photon iMessage tapbacks, replies, effects)</text>
+  <rect x="48" y="352" width="280" height="112" rx="10" fill="#1c1a15" stroke="#3a352b"/>
+  <text x="64" y="376" font-family="ui-monospace, SFMono-Regular, monospace" font-size="12.5" font-weight="700" fill="#faf6ee">ctx.register_tool (4 Tools)</text>
+  <text x="64" y="398" font-family="ui-monospace, SFMono-Regular, monospace" font-size="11.5" fill="#c9a961">• butler_controls</text>
+  <text x="64" y="417" font-family="ui-monospace, SFMono-Regular, monospace" font-size="11.5" fill="#c9a961">• butler_create / butler_manage</text>
+  <text x="64" y="436" font-family="ui-monospace, SFMono-Regular, monospace" font-size="11.5" fill="#c9a961">• butler_expression</text>
+  <text x="64" y="453" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="11.5" fill="#a89e8a">  (Photon iMessage tapbacks, replies, effects)</text>
 
-  <rect x="48" y="482" width="280" height="128" rx="10" fill="#162033" stroke="#334155"/>
-  <text x="64" y="506" font-family="ui-monospace, SFMono-Regular, monospace" font-size="12.5" font-weight="700" fill="#f8fafc">Hermes Desktop Host</text>
-  <text x="64" y="528" font-family="ui-monospace, SFMono-Regular, monospace" font-size="11.5" fill="#c4b5fd">desktop/plugin.js (@hermes/plugin-sdk)</text>
-  <text x="64" y="549" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="12" fill="#cbd5e1">• Sidebar route /proactive-assistant</text>
-  <text x="64" y="568" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="12" fill="#cbd5e1">• Re-keys automatically on profile switch</text>
-  <text x="64" y="587" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="12" fill="#cbd5e1">• Core plugin works even if Desktop closed</text>
+  <rect x="48" y="482" width="280" height="128" rx="10" fill="#1c1a15" stroke="#3a352b"/>
+  <text x="64" y="506" font-family="ui-monospace, SFMono-Regular, monospace" font-size="12.5" font-weight="700" fill="#faf6ee">Hermes Desktop Host</text>
+  <text x="64" y="528" font-family="ui-monospace, SFMono-Regular, monospace" font-size="11.5" fill="#efe6d3">desktop/plugin.js (@hermes/plugin-sdk)</text>
+  <text x="64" y="549" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="12" fill="#d9cfbb">• Sidebar route /proactive-assistant</text>
+  <text x="64" y="568" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="12" fill="#d9cfbb">• Re-keys automatically on profile switch</text>
+  <text x="64" y="587" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="12" fill="#d9cfbb">• Core plugin works even if Desktop closed</text>
 
   <!-- Column 2: Butler Engine -->
-  <rect x="412" y="86" width="386" height="546" rx="14" fill="#0f172a" stroke="#10b981" stroke-opacity="0.45" stroke-width="1.5"/>
-  <text x="432" y="116" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="13" font-weight="700" fill="#34d399" letter-spacing="0.8">BUTLER ENGINE (butler/*)</text>
+  <rect x="412" y="86" width="386" height="546" rx="14" fill="#12110e" stroke="#b8964f" stroke-opacity="0.45" stroke-width="1.5"/>
+  <text x="432" y="116" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="13" font-weight="700" fill="#d4b978" letter-spacing="0.8">BUTLER ENGINE (butler/*)</text>
 
-  <rect x="432" y="136" width="346" height="96" rx="10" fill="#162033" stroke="#334155"/>
-  <text x="448" y="160" font-family="ui-monospace, SFMono-Regular, monospace" font-size="12.5" font-weight="700" fill="#fbbf24">awareness.py + context.py</text>
-  <text x="448" y="181" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="12" fill="#cbd5e1">• Zone chain: profile → config → OS → UTC</text>
-  <text x="448" y="200" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="12" fill="#cbd5e1">• Opt-in IP timezone check for onboarding</text>
-  <text x="448" y="219" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="12" fill="#cbd5e1">• _MODEL_MUTABLE_KEYS blocks privacy escalation</text>
+  <rect x="432" y="136" width="346" height="96" rx="10" fill="#1c1a15" stroke="#3a352b"/>
+  <text x="448" y="160" font-family="ui-monospace, SFMono-Regular, monospace" font-size="12.5" font-weight="700" fill="#e0c27a">awareness.py + context.py</text>
+  <text x="448" y="181" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="12" fill="#d9cfbb">• Zone chain: profile → config → OS → UTC</text>
+  <text x="448" y="200" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="12" fill="#d9cfbb">• Opt-in IP timezone check for onboarding</text>
+  <text x="448" y="219" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="12" fill="#d9cfbb">• _MODEL_MUTABLE_KEYS blocks privacy escalation</text>
 
-  <rect x="432" y="248" width="346" height="92" rx="10" fill="#162033" stroke="#334155"/>
-  <text x="448" y="272" font-family="ui-monospace, SFMono-Regular, monospace" font-size="12.5" font-weight="700" fill="#34d399">notifications.py (Load &amp; Bloat Sync)</text>
-  <text x="448" y="293" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="12" fill="#cbd5e1">• Builds merge_existing + preserve_keys patch</text>
-  <text x="448" y="312" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="12" fill="#cbd5e1">• Aligns display.*, skills.*, gateway.*, platforms.*</text>
-  <text x="448" y="329" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="12" fill="#cbd5e1">• Safety notifications always bypass suppression</text>
+  <rect x="432" y="248" width="346" height="92" rx="10" fill="#1c1a15" stroke="#3a352b"/>
+  <text x="448" y="272" font-family="ui-monospace, SFMono-Regular, monospace" font-size="12.5" font-weight="700" fill="#d4b978">notifications.py (Load &amp; Bloat Sync)</text>
+  <text x="448" y="293" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="12" fill="#d9cfbb">• Builds merge_existing + preserve_keys patch</text>
+  <text x="448" y="312" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="12" fill="#d9cfbb">• Aligns display.*, skills.*, gateway.*, platforms.*</text>
+  <text x="448" y="329" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="12" fill="#d9cfbb">• Safety notifications always bypass suppression</text>
 
-  <rect x="432" y="356" width="346" height="122" rx="10" fill="#162033" stroke="#334155"/>
-  <text x="448" y="380" font-family="ui-monospace, SFMono-Regular, monospace" font-size="12.5" font-weight="700" fill="#38bdf8">policy.py + store.py + scheduler.py</text>
-  <text x="448" y="401" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="12" fill="#cbd5e1">• Policy.capture_allowed() &amp; reserve_wake(now)</text>
-  <text x="448" y="420" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="12" fill="#cbd5e1">• Atomic BEGIN IMMEDIATE lease claims &amp; backoff</text>
-  <text x="448" y="439" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="12" fill="#cbd5e1">• Rejects unauthenticated session_key wake routes</text>
-  <text x="448" y="458" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="12" fill="#cbd5e1">• WatcherEngine: path-allowlisted state diffs</text>
+  <rect x="432" y="356" width="346" height="122" rx="10" fill="#1c1a15" stroke="#3a352b"/>
+  <text x="448" y="380" font-family="ui-monospace, SFMono-Regular, monospace" font-size="12.5" font-weight="700" fill="#c9a961">policy.py + store.py + scheduler.py</text>
+  <text x="448" y="401" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="12" fill="#d9cfbb">• Policy.capture_allowed() &amp; reserve_wake(now)</text>
+  <text x="448" y="420" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="12" fill="#d9cfbb">• Atomic BEGIN IMMEDIATE lease claims &amp; backoff</text>
+  <text x="448" y="439" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="12" fill="#d9cfbb">• Rejects unauthenticated session_key wake routes</text>
+  <text x="448" y="458" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="12" fill="#d9cfbb">• WatcherEngine: path-allowlisted state diffs</text>
 
-  <rect x="432" y="494" width="346" height="116" rx="10" fill="#162033" stroke="#334155"/>
-  <text x="448" y="518" font-family="ui-monospace, SFMono-Regular, monospace" font-size="12.5" font-weight="700" fill="#c4b5fd">dashboard/plugin_api.py + event_hooks.py</text>
-  <text x="448" y="539" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="12" fill="#cbd5e1">• FastAPI: GET /state, PUT /settings (HTTP 422),</text>
-  <text x="448" y="558" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="12" fill="#cbd5e1">  POST /detect-timezone, POST /preset</text>
-  <text x="448" y="577" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="12" fill="#cbd5e1">• EventLedger: stable message_id dedupe, 7d/10 cap</text>
-  <text x="448" y="596" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="12" fill="#cbd5e1">• Untrusted-content XML fencing</text>
+  <rect x="432" y="494" width="346" height="116" rx="10" fill="#1c1a15" stroke="#3a352b"/>
+  <text x="448" y="518" font-family="ui-monospace, SFMono-Regular, monospace" font-size="12.5" font-weight="700" fill="#efe6d3">dashboard/plugin_api.py + event_hooks.py</text>
+  <text x="448" y="539" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="12" fill="#d9cfbb">• FastAPI: GET /state, PUT /settings (HTTP 422),</text>
+  <text x="448" y="558" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="12" fill="#d9cfbb">  POST /detect-timezone, POST /preset</text>
+  <text x="448" y="577" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="12" fill="#d9cfbb">• EventLedger: stable message_id dedupe, 7d/10 cap</text>
+  <text x="448" y="596" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="12" fill="#d9cfbb">• Untrusted-content XML fencing</text>
 
   <!-- Column 3: Profile Storage & Config -->
-  <rect x="862" y="86" width="310" height="546" rx="14" fill="#0f172a" stroke="#fbbf24" stroke-opacity="0.45" stroke-width="1.5"/>
-  <text x="882" y="116" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="13" font-weight="700" fill="#fbbf24" letter-spacing="0.8">PROFILE DATA &amp; HERMES CONFIG</text>
+  <rect x="862" y="86" width="310" height="546" rx="14" fill="#12110e" stroke="#e0c27a" stroke-opacity="0.45" stroke-width="1.5"/>
+  <text x="882" y="116" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="13" font-weight="700" fill="#e0c27a" letter-spacing="0.8">PROFILE DATA &amp; HERMES CONFIG</text>
 
-  <rect x="882" y="136" width="270" height="96" rx="10" fill="#162033" stroke="#334155"/>
-  <text x="898" y="160" font-family="ui-monospace, SFMono-Regular, monospace" font-size="12" font-weight="700" fill="#fbbf24">plugin_data_dir('butler')/</text>
-  <text x="898" y="182" font-family="ui-monospace, SFMono-Regular, monospace" font-size="12" fill="#f8fafc">settings.json</text>
-  <text x="898" y="202" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="11.5" fill="#cbd5e1">Atomic temp-file + chmod 0600 +</text>
-  <text x="898" y="219" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="11.5" fill="#cbd5e1">os.replace() strict schema validation</text>
+  <rect x="882" y="136" width="270" height="96" rx="10" fill="#1c1a15" stroke="#3a352b"/>
+  <text x="898" y="160" font-family="ui-monospace, SFMono-Regular, monospace" font-size="12" font-weight="700" fill="#e0c27a">plugin_data_dir('butler')/</text>
+  <text x="898" y="182" font-family="ui-monospace, SFMono-Regular, monospace" font-size="12" fill="#faf6ee">settings.json</text>
+  <text x="898" y="202" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="11.5" fill="#d9cfbb">Atomic temp-file + chmod 0600 +</text>
+  <text x="898" y="219" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="11.5" fill="#d9cfbb">os.replace() strict schema validation</text>
 
-  <rect x="882" y="248" width="270" height="92" rx="10" fill="#162033" stroke="#334155"/>
-  <text x="898" y="272" font-family="ui-monospace, SFMono-Regular, monospace" font-size="12" font-weight="700" fill="#34d399">hermes_cli.config</text>
-  <text x="898" y="294" font-family="ui-monospace, SFMono-Regular, monospace" font-size="12" fill="#f8fafc">~/.hermes/.../config.yaml</text>
-  <text x="898" y="314" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="11.5" fill="#cbd5e1">Public load_config / save_config</text>
-  <text x="898" y="330" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="11.5" fill="#cbd5e1">(never leaks secrets or tokens)</text>
+  <rect x="882" y="248" width="270" height="92" rx="10" fill="#1c1a15" stroke="#3a352b"/>
+  <text x="898" y="272" font-family="ui-monospace, SFMono-Regular, monospace" font-size="12" font-weight="700" fill="#d4b978">hermes_cli.config</text>
+  <text x="898" y="294" font-family="ui-monospace, SFMono-Regular, monospace" font-size="12" fill="#faf6ee">~/.hermes/.../config.yaml</text>
+  <text x="898" y="314" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="11.5" fill="#d9cfbb">Public load_config / save_config</text>
+  <text x="898" y="330" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="11.5" fill="#d9cfbb">(never leaks secrets or tokens)</text>
 
-  <rect x="882" y="356" width="270" height="122" rx="10" fill="#162033" stroke="#334155"/>
-  <text x="898" y="380" font-family="ui-monospace, SFMono-Regular, monospace" font-size="12" font-weight="700" fill="#38bdf8">responsibilities.sqlite3</text>
-  <text x="898" y="401" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="11.5" fill="#cbd5e1">• Durable across /new &amp; gateway restarts</text>
-  <text x="898" y="420" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="11.5" fill="#cbd5e1">• Opened ?mode=ro by dashboard API</text>
-  <text x="898" y="444" font-family="ui-monospace, SFMono-Regular, monospace" font-size="12" font-weight="700" fill="#38bdf8">policy.sqlite3</text>
-  <text x="898" y="463" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="11.5" fill="#cbd5e1">• Cross-process daily wake cap ledger</text>
+  <rect x="882" y="356" width="270" height="122" rx="10" fill="#1c1a15" stroke="#3a352b"/>
+  <text x="898" y="380" font-family="ui-monospace, SFMono-Regular, monospace" font-size="12" font-weight="700" fill="#c9a961">responsibilities.sqlite3</text>
+  <text x="898" y="401" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="11.5" fill="#d9cfbb">• Durable across /new &amp; gateway restarts</text>
+  <text x="898" y="420" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="11.5" fill="#d9cfbb">• Opened ?mode=ro by dashboard API</text>
+  <text x="898" y="444" font-family="ui-monospace, SFMono-Regular, monospace" font-size="12" font-weight="700" fill="#c9a961">policy.sqlite3</text>
+  <text x="898" y="463" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="11.5" fill="#d9cfbb">• Cross-process daily wake cap ledger</text>
 
-  <rect x="882" y="494" width="270" height="116" rx="10" fill="#162033" stroke="#334155"/>
-  <text x="898" y="518" font-family="ui-monospace, SFMono-Regular, monospace" font-size="12" font-weight="700" fill="#c4b5fd">events.sqlite3 (Opt-In Only)</text>
-  <text x="898" y="539" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="11.5" fill="#cbd5e1">• Created ONLY when both config</text>
-  <text x="898" y="557" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="11.5" fill="#cbd5e1">  collect_event_history=true AND</text>
-  <text x="898" y="575" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="11.5" fill="#cbd5e1">  Policy.capture_allowed() are true</text>
-  <text x="898" y="594" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="11.5" fill="#cbd5e1">• Bounded capacity + checkpointing</text>
+  <rect x="882" y="494" width="270" height="116" rx="10" fill="#1c1a15" stroke="#3a352b"/>
+  <text x="898" y="518" font-family="ui-monospace, SFMono-Regular, monospace" font-size="12" font-weight="700" fill="#efe6d3">events.sqlite3 (Opt-In Only)</text>
+  <text x="898" y="539" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="11.5" fill="#d9cfbb">• Created ONLY when both config</text>
+  <text x="898" y="557" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="11.5" fill="#d9cfbb">  collect_event_history=true AND</text>
+  <text x="898" y="575" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="11.5" fill="#d9cfbb">  Policy.capture_allowed() are true</text>
+  <text x="898" y="594" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="11.5" fill="#d9cfbb">• Bounded capacity + checkpointing</text>
 
   <!-- Connectors -->
-  <line x1="328" y1="180" x2="428" y2="180" stroke="#fbbf24" stroke-width="2" marker-end="url(#arrowAmber)"/>
-  <line x1="328" y1="285" x2="428" y2="205" stroke="#fbbf24" stroke-width="2" marker-end="url(#arrowAmber)" marker-start="url(#arrowAmber)"/>
-  <line x1="328" y1="405" x2="428" y2="405" stroke="#38bdf8" stroke-width="2" marker-end="url(#arrowSky)"/>
-  <line x1="328" y1="548" x2="428" y2="548" stroke="#a78bfa" stroke-width="2" marker-end="url(#arrowViolet)" marker-start="url(#arrowViolet)"/>
+  <line x1="328" y1="180" x2="428" y2="180" stroke="#e0c27a" stroke-width="2" marker-end="url(#arrowAmber)"/>
+  <line x1="328" y1="285" x2="428" y2="205" stroke="#e0c27a" stroke-width="2" marker-end="url(#arrowAmber)" marker-start="url(#arrowAmber)"/>
+  <line x1="328" y1="405" x2="428" y2="405" stroke="#c9a961" stroke-width="2" marker-end="url(#arrowSky)"/>
+  <line x1="328" y1="548" x2="428" y2="548" stroke="#e8dcc4" stroke-width="2" marker-end="url(#arrowViolet)" marker-start="url(#arrowViolet)"/>
 
-  <line x1="778" y1="184" x2="878" y2="184" stroke="#fbbf24" stroke-width="2" marker-end="url(#arrowAmber)" marker-start="url(#arrowAmber)"/>
-  <line x1="778" y1="294" x2="878" y2="294" stroke="#34d399" stroke-width="2" marker-end="url(#arrowEmerald)" marker-start="url(#arrowEmerald)"/>
-  <line x1="778" y1="416" x2="878" y2="416" stroke="#38bdf8" stroke-width="2" marker-end="url(#arrowSky)"/>
-  <line x1="778" y1="552" x2="878" y2="552" stroke="#a78bfa" stroke-width="2" marker-end="url(#arrowViolet)"/>
+  <line x1="778" y1="184" x2="878" y2="184" stroke="#e0c27a" stroke-width="2" marker-end="url(#arrowAmber)" marker-start="url(#arrowAmber)"/>
+  <line x1="778" y1="294" x2="878" y2="294" stroke="#d4b978" stroke-width="2" marker-end="url(#arrowEmerald)" marker-start="url(#arrowEmerald)"/>
+  <line x1="778" y1="416" x2="878" y2="416" stroke="#c9a961" stroke-width="2" marker-end="url(#arrowSky)"/>
+  <line x1="778" y1="552" x2="878" y2="552" stroke="#e8dcc4" stroke-width="2" marker-end="url(#arrowViolet)"/>
 </svg>
