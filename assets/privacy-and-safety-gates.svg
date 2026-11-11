@@ -1,0 +1,50 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 380" width="1200" height="380" role="img" aria-label="Overseer privacy and fail-closed safety boundaries">
+  <rect width="1200" height="380" rx="18" fill="#0b1120" stroke="#334155" stroke-width="1.5"/>
+  <text x="600" y="40" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="19" font-weight="700" fill="#f8fafc">Defense-in-Depth: Dual-Gate Consent &amp; Fail-Closed Security Boundaries</text>
+  <text x="600" y="63" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="13" fill="#94a3b8">Every sensitive capability defaults OFF, validates strictly, and fails closed rather than trusting spoofable state</text>
+
+  <!-- Gate 1 -->
+  <g transform="translate(32, 92)">
+    <rect width="360" height="256" rx="14" fill="#131d31" stroke="#f43f5e" stroke-opacity="0.5" stroke-width="1.5"/>
+    <text x="22" y="34" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="14" font-weight="700" fill="#fda4af">1 · DUAL-LOCK DM CAPTURE (DEFAULT OFF)</text>
+    <text x="22" y="62" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="12.5" fill="#e2e8f0">Inbound DMs are NEVER recorded unless BOTH</text>
+    <text x="22" y="80" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="12.5" fill="#e2e8f0">independent locks are explicitly enabled:</text>
+    <rect x="22" y="96" width="316" height="52" rx="8" fill="#0b1120" stroke="#334155"/>
+    <text x="34" y="117" font-family="ui-monospace, SFMono-Regular, monospace" font-size="11.5" fill="#fbbf24">Lock A: collect_event_history == true</text>
+    <text x="34" y="136" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="11.5" fill="#94a3b8">Host config.yaml plugin setting (default: false)</text>
+    <rect x="22" y="158" width="316" height="52" rx="8" fill="#0b1120" stroke="#334155"/>
+    <text x="34" y="179" font-family="ui-monospace, SFMono-Regular, monospace" font-size="11.5" fill="#34d399">Lock B: activityEnabled &amp;&amp; !paused</text>
+    <text x="34" y="198" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="11.5" fill="#94a3b8">Profile UI consent — immutable by LLM tools</text>
+    <text x="22" y="234" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="11.5" fill="#cbd5e1">✓ Stable message_id required · Untrusted XML tags</text>
+  </g>
+
+  <!-- Gate 2 -->
+  <g transform="translate(420, 92)">
+    <rect width="360" height="256" rx="14" fill="#131d31" stroke="#fbbf24" stroke-opacity="0.5" stroke-width="1.5"/>
+    <text x="22" y="34" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="14" font-weight="700" fill="#fcd34d">2 · FAIL-CLOSED SESSION IDENTITY</text>
+    <text x="22" y="62" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="12.5" fill="#e2e8f0">Overseer refuses to trust spoofable env vars</text>
+    <text x="22" y="80" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="12.5" fill="#e2e8f0">or import private Hermes core internals:</text>
+    <rect x="22" y="96" width="316" height="52" rx="8" fill="#0b1120" stroke="#334155"/>
+    <text x="34" y="117" font-family="ui-monospace, SFMono-Regular, monospace" font-size="11.5" fill="#f87171">✗ HERMES_SESSION_KEY env fallback</text>
+    <text x="34" y="136" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="11.5" fill="#94a3b8">Rejected — caller/tool subprocesses could spoof</text>
+    <rect x="22" y="158" width="316" height="52" rx="8" fill="#0b1120" stroke="#334155"/>
+    <text x="34" y="179" font-family="ui-monospace, SFMono-Regular, monospace" font-size="11.5" fill="#f87171">✗ gateway.session_context private import</text>
+    <text x="34" y="198" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="11.5" fill="#94a3b8">Avoided — keeps 100% public catalog compliance</text>
+    <text x="22" y="234" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="11.5" fill="#cbd5e1">✓ Wake routes &amp; DM replay fail closed safely</text>
+  </g>
+
+  <!-- Gate 3 -->
+  <g transform="translate(808, 92)">
+    <rect width="360" height="256" rx="14" fill="#131d31" stroke="#38bdf8" stroke-opacity="0.5" stroke-width="1.5"/>
+    <text x="22" y="34" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="14" font-weight="700" fill="#7dd3fc">3 · ATOMIC POLICY &amp; CREDENTIAL SAFETY</text>
+    <text x="22" y="62" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="12.5" fill="#e2e8f0">Strict schema checks, cross-process SQLite</text>
+    <text x="22" y="80" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="12.5" fill="#e2e8f0">locks, and zero credential exposure:</text>
+    <rect x="22" y="96" width="316" height="52" rx="8" fill="#0b1120" stroke="#334155"/>
+    <text x="34" y="117" font-family="ui-monospace, SFMono-Regular, monospace" font-size="11.5" fill="#38bdf8">Policy.reserve_wake(now) + Leases</text>
+    <text x="34" y="136" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="11.5" fill="#94a3b8">BEGIN IMMEDIATE transactions prevent floods</text>
+    <rect x="22" y="158" width="316" height="52" rx="8" fill="#0b1120" stroke="#334155"/>
+    <text x="34" y="179" font-family="ui-monospace, SFMono-Regular, monospace" font-size="11.5" fill="#34d399">chmod 0600 + ?mode=ro + Allowlists</text>
+    <text x="34" y="198" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="11.5" fill="#94a3b8">Read-only UI DB · Never asks for passwords in chat</text>
+    <text x="22" y="234" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="11.5" fill="#cbd5e1">✓ HTTP 422 rejects any malformed/out-of-range input</text>
+  </g>
+</svg>

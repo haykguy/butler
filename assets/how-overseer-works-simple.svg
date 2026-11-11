@@ -1,0 +1,115 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 430" width="1200" height="430" role="img" aria-label="Four simple ways Overseer upgrades your AI assistant">
+  <defs>
+    <linearGradient id="bgGrad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0f172a"/>
+      <stop offset="100%" stop-color="#1e293b"/>
+    </linearGradient>
+    <linearGradient id="amberGlow" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#f59e0b" stop-opacity="0.22"/>
+      <stop offset="100%" stop-color="#f59e0b" stop-opacity="0.04"/>
+    </linearGradient>
+    <linearGradient id="emeraldGlow" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#10b981" stop-opacity="0.22"/>
+      <stop offset="100%" stop-color="#10b981" stop-opacity="0.04"/>
+    </linearGradient>
+    <linearGradient id="skyGlow" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#38bdf8" stop-opacity="0.22"/>
+      <stop offset="100%" stop-color="#38bdf8" stop-opacity="0.04"/>
+    </linearGradient>
+    <linearGradient id="violetGlow" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#a78bfa" stop-opacity="0.22"/>
+      <stop offset="100%" stop-color="#a78bfa" stop-opacity="0.04"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="1200" height="430" rx="20" fill="url(#bgGrad)"/>
+  <rect x="1" y="1" width="1198" height="428" rx="19" fill="none" stroke="#334155" stroke-width="1.5"/>
+
+  <text x="600" y="46" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, sans-serif" font-size="22" font-weight="700" fill="#f8fafc">How Overseer Makes Your AI Feel Like a Thoughtful Human</text>
+  <text x="600" y="72" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, sans-serif" font-size="14" fill="#94a3b8">No jargon, no coding required — four everyday upgrades working quietly in the background</text>
+
+  <!-- Card 1 -->
+  <g transform="translate(32, 98)">
+    <rect width="268" height="300" rx="16" fill="#131d31" stroke="#f59e0b" stroke-opacity="0.45" stroke-width="1.5"/>
+    <rect x="16" y="16" width="236" height="66" rx="12" fill="url(#amberGlow)"/>
+    <circle cx="48" cy="49" r="19" fill="#f59e0b" fill-opacity="0.2" stroke="#fbbf24" stroke-width="2"/>
+    <line x1="48" y1="49" x2="48" y2="38" stroke="#fbbf24" stroke-width="2.2" stroke-linecap="round"/>
+    <line x1="48" y1="49" x2="57" y2="53" stroke="#fbbf24" stroke-width="2.2" stroke-linecap="round"/>
+    <text x="78" y="45" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="12" font-weight="700" fill="#fbbf24" letter-spacing="0.8">STEP 1 · REAL CLOCK</text>
+    <text x="78" y="64" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="16" font-weight="700" fill="#f8fafc">Knows Your Time</text>
+
+    <text x="20" y="112" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="13.5" fill="#cbd5e1">Standard AI cannot tell if</text>
+    <text x="20" y="132" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="13.5" fill="#cbd5e1">you replied in 10 seconds or</text>
+    <text x="20" y="152" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="13.5" fill="#cbd5e1">came back the next morning.</text>
+
+    <rect x="18" y="176" width="232" height="104" rx="10" fill="#0b1324" stroke="#1e293b"/>
+    <text x="30" y="200" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="12" font-weight="600" fill="#fbbf24">With Overseer:</text>
+    <text x="30" y="221" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="12.5" fill="#e2e8f0">• Sees your local timezone</text>
+    <text x="30" y="242" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="12.5" fill="#e2e8f0">• Tracks exact gaps between texts</text>
+    <text x="30" y="263" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="12.5" fill="#e2e8f0">• Respects your sleep hours</text>
+  </g>
+
+  <!-- Card 2 -->
+  <g transform="translate(321, 98)">
+    <rect width="268" height="300" rx="16" fill="#131d31" stroke="#10b981" stroke-opacity="0.45" stroke-width="1.5"/>
+    <rect x="16" y="16" width="236" height="66" rx="12" fill="url(#emeraldGlow)"/>
+    <circle cx="48" cy="49" r="19" fill="#10b981" fill-opacity="0.2" stroke="#34d399" stroke-width="2"/>
+    <path d="M40 49 L46 55 L57 43" fill="none" stroke="#34d399" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+    <text x="78" y="45" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="12" font-weight="700" fill="#34d399" letter-spacing="0.8">STEP 2 · CALM INBOX</text>
+    <text x="78" y="64" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="16" font-weight="700" fill="#f8fafc">Silences Robot Spam</text>
+
+    <text x="20" y="112" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="13.5" fill="#cbd5e1">Nobody wants noisy system</text>
+    <text x="20" y="132" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="13.5" fill="#cbd5e1">alerts mixed into personal</text>
+    <text x="20" y="152" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="13.5" fill="#cbd5e1">text conversations.</text>
+
+    <rect x="18" y="176" width="232" height="104" rx="10" fill="#0b1324" stroke="#1e293b"/>
+    <text x="30" y="200" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="12" font-weight="600" fill="#34d399">One-Click Quiet Mode:</text>
+    <text x="30" y="221" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="12.5" fill="#e2e8f0">• Mutes rate-limit &amp; tool chatter</text>
+    <text x="30" y="242" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="12.5" fill="#e2e8f0">• Hides &quot;Gateway online&quot; banners</text>
+    <text x="30" y="263" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="12.5" fill="#e2e8f0">• Short, natural human replies</text>
+  </g>
+
+  <!-- Card 3 -->
+  <g transform="translate(610, 98)">
+    <rect width="268" height="300" rx="16" fill="#131d31" stroke="#38bdf8" stroke-opacity="0.45" stroke-width="1.5"/>
+    <rect x="16" y="16" width="236" height="66" rx="12" fill="url(#skyGlow)"/>
+    <circle cx="48" cy="49" r="19" fill="#38bdf8" fill-opacity="0.2" stroke="#38bdf8" stroke-width="2"/>
+    <line x1="39" y1="44" x2="57" y2="44" stroke="#38bdf8" stroke-width="2" stroke-linecap="round"/>
+    <circle cx="45" cy="44" r="3" fill="#f8fafc"/>
+    <line x1="39" y1="54" x2="57" y2="54" stroke="#38bdf8" stroke-width="2" stroke-linecap="round"/>
+    <circle cx="52" cy="54" r="3" fill="#f8fafc"/>
+    <text x="78" y="45" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="12" font-weight="700" fill="#38bdf8" letter-spacing="0.8">STEP 3 · YOUR VIBE</text>
+    <text x="78" y="64" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="16" font-weight="700" fill="#f8fafc">Custom Coaching Dial</text>
+
+    <text x="20" y="112" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="13.5" fill="#cbd5e1">Pick how warm or direct it</text>
+    <text x="20" y="132" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="13.5" fill="#cbd5e1">sounds, separate from how</text>
+    <text x="20" y="152" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="13.5" fill="#cbd5e1">closely it follows through.</text>
+
+    <rect x="18" y="176" width="232" height="104" rx="10" fill="#0b1324" stroke="#1e293b"/>
+    <text x="30" y="200" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="12" font-weight="600" fill="#38bdf8">Two Independent Dials:</text>
+    <text x="30" y="221" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="12.5" fill="#e2e8f0">• Tone: Gentle → Strict</text>
+    <text x="30" y="242" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="12.5" fill="#e2e8f0">• Follow-Up: Minimal → Persistent</text>
+    <text x="30" y="263" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="12.5" fill="#e2e8f0">• Native reactions &amp; replies</text>
+  </g>
+
+  <!-- Card 4 -->
+  <g transform="translate(899, 98)">
+    <rect width="268" height="300" rx="16" fill="#131d31" stroke="#a78bfa" stroke-opacity="0.45" stroke-width="1.5"/>
+    <rect x="16" y="16" width="236" height="66" rx="12" fill="url(#violetGlow)"/>
+    <circle cx="48" cy="49" r="19" fill="#a78bfa" fill-opacity="0.2" stroke="#c4b5fd" stroke-width="2"/>
+    <rect x="41" y="47" width="14" height="11" rx="2.5" fill="none" stroke="#c4b5fd" stroke-width="2"/>
+    <path d="M44 47 V43 A4 4 0 0 1 52 43 V47" fill="none" stroke="#c4b5fd" stroke-width="2"/>
+    <text x="78" y="45" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="12" font-weight="700" fill="#c4b5fd" letter-spacing="0.8">STEP 4 · YOUR DATA</text>
+    <text x="78" y="64" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="16" font-weight="700" fill="#f8fafc">Private by Default</text>
+
+    <text x="20" y="112" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="13.5" fill="#cbd5e1">Everything stays on your</text>
+    <text x="20" y="132" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="13.5" fill="#cbd5e1">own computer — with honest,</text>
+    <text x="20" y="152" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="13.5" fill="#cbd5e1">transparent privacy switches.</text>
+
+    <rect x="18" y="176" width="232" height="104" rx="10" fill="#0b1324" stroke="#1e293b"/>
+    <text x="30" y="200" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="12" font-weight="600" fill="#c4b5fd">Built-In Guardrails:</text>
+    <text x="30" y="221" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="12.5" fill="#e2e8f0">• Saves tasks across restarts</text>
+    <text x="30" y="242" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="12.5" fill="#e2e8f0">• Chat capture is OFF by default</text>
+    <text x="30" y="263" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="12.5" fill="#e2e8f0">• Instant Master Pause anytime</text>
+  </g>
+</svg>

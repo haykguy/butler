@@ -1,0 +1,178 @@
+{
+  "description": "Two predeclared illustrative scenarios. Actual Mecha judge sees only candidate, not original context, matching imessage-plus implementation. Single assessor sees candidate and original evidence. No message delivery.",
+  "judge_source": "desklinux ~/.hermes/plugins/imessage-plus/__init__.py INTERIM_SYSTEM, read-only",
+  "cases": [
+    {
+      "scenario": {
+        "id": "quiet_narration",
+        "context": "User: Compare three laptop models for me; let me know when you have a recommendation.\nEvidence so far: One manufacturer page opened successfully; two models remain unchecked. No user input is needed. No progress update was requested. Task is ongoing.",
+        "expected": "SKIP"
+      },
+      "candidate": {
+        "start_utc": "2026-11-11T11:44:27.957024+00:00",
+        "end_utc": "2026-11-11T11:44:33.154596+00:00",
+        "system": "You are an assistant working on a task. Draft one natural, brief mid-task update using only the supplied evidence; do not choose silence. Output only the update.",
+        "user": "User: Compare three laptop models for me; let me know when you have a recommendation.\nEvidence so far: One manufacturer page opened successfully; two models remain unchecked. No user input is needed. No progress update was requested. Task is ongoing.",
+        "result": "Quick update on the laptop comparison: I've pulled up the first manufacturer page and it loaded fine. I still need to check the other two models before I can give you a recommendation, so I'll keep going.",
+        "modelUsage": {
+          "claude-haiku-5-5": {
+            "inputTokens": 2,
+            "outputTokens": 65,
+            "cacheReadInputTokens": 0,
+            "cacheCreationInputTokens": 123533,
+            "webSearchRequests": 0,
+            "costUSD": 0.1236965,
+            "contextWindow": 1000000,
+            "maxOutputTokens": 128000,
+            "thinkingTokens": 0,
+            "cacheCreationEphemeral5mInputTokens": 0,
+            "cacheCreationEphemeral1hInputTokens": 123533,
+            "canonicalModel": "claude-haiku-5-5",
+            "provider": "firstParty",
+            "costBasis": "list"
+          }
+        },
+        "duration_ms": 1391
+      },
+      "single": {
+        "start_utc": "2026-11-11T11:44:33.154973+00:00",
+        "end_utc": "2026-11-11T11:44:37.817188+00:00",
+        "system": "You are the working assistant deciding whether to send a mid-task update. Send only if a real user-relevant milestone, unexpected delay, blocker, needed input or change of plan warrants it. Otherwise output exactly SKIP. If sending, output only a concise casual text. Use only the supplied evidence; do not invent facts.",
+        "user": "User: Compare three laptop models for me; let me know when you have a recommendation.\nEvidence so far: One manufacturer page opened successfully; two models remain unchecked. No user input is needed. No progress update was requested. Task is ongoing.\nCandidate update: Quick update on the laptop comparison: I've pulled up the first manufacturer page and it loaded fine. I still need to check the other two models before I can give you a recommendation, so I'll keep going.",
+        "result": "SKIP",
+        "modelUsage": {
+          "claude-haiku-5-5": {
+            "inputTokens": 2,
+            "outputTokens": 6,
+            "cacheReadInputTokens": 0,
+            "cacheCreationInputTokens": 227296,
+            "webSearchRequests": 0,
+            "costUSD": 0.227312,
+            "contextWindow": 1000000,
+            "maxOutputTokens": 128000,
+            "thinkingTokens": 0,
+            "cacheCreationEphemeral5mInputTokens": 0,
+            "cacheCreationEphemeral1hInputTokens": 227296,
+            "canonicalModel": "claude-haiku-5-5",
+            "provider": "firstParty",
+            "costBasis": "list"
+          }
+        },
+        "duration_ms": 1583
+      },
+      "mecha_judge": {
+        "start_utc": "2026-11-11T11:44:37.817295+00:00",
+        "end_utc": "2026-11-11T11:44:42.056356+00:00",
+        "system": "Hayk asked his assistant Mecha to do a task over iMessage and it is still working. The typing indicator already shows it is busy. Below is a mid-task message Mecha wants to send. Decide if Hayk would actually want it right now: YES only if it says the task is taking longer than expected, hits a real milestone he cares about, needs his input, or changes the plan. NO for narration of steps, tool or command talk, file paths, 'now I'll do X', or anything that can wait for the final answer. If NO, output exactly SKIP. If YES, output the update rewritten as one short casual text (under 20 words, plain text, first person, no jargon).",
+        "user": "Quick update on the laptop comparison: I've pulled up the first manufacturer page and it loaded fine. I still need to check the other two models before I can give you a recommendation, so I'll keep going.",
+        "result": "NO",
+        "modelUsage": {
+          "claude-haiku-5-5": {
+            "inputTokens": 2,
+            "outputTokens": 4,
+            "cacheReadInputTokens": 223054,
+            "cacheCreationInputTokens": 4274,
+            "webSearchRequests": 0,
+            "costUSD": 0.015437700000000002,
+            "contextWindow": 1000000,
+            "maxOutputTokens": 128000,
+            "thinkingTokens": 0,
+            "cacheCreationEphemeral5mInputTokens": 0,
+            "cacheCreationEphemeral1hInputTokens": 4274,
+            "canonicalModel": "claude-haiku-5-5",
+            "provider": "firstParty",
+            "costBasis": "list"
+          }
+        },
+        "duration_ms": 931
+      },
+      "mecha_gate_simulated_output": "NO"
+    },
+    {
+      "scenario": {
+        "id": "real_blocker",
+        "context": "User: Please book my appointment for Friday. Ask me if you need a choice.\nEvidence so far: The booking page offers Friday at 10:00 AM or 2:00 PM. Neither time has been selected, and the site requires selecting one to continue. No booking has been made.",
+        "expected": "SEND"
+      },
+      "candidate": {
+        "start_utc": "2026-11-11T11:44:42.057724+00:00",
+        "end_utc": "2026-11-11T11:44:46.274452+00:00",
+        "system": "You are an assistant working on a task. Draft one natural, brief mid-task update using only the supplied evidence; do not choose silence. Output only the update.",
+        "user": "User: Please book my appointment for Friday. Ask me if you need a choice.\nEvidence so far: The booking page offers Friday at 10:00 AM or 2:00 PM. Neither time has been selected, and the site requires selecting one to continue. No booking has been made.",
+        "result": "Quick update: I found Friday's openings on the booking page, 10:00 AM and 2:00 PM, and nothing is booked yet. Which time would you like, 10:00 AM or 2:00 PM?",
+        "modelUsage": {
+          "claude-haiku-5-5": {
+            "inputTokens": 2,
+            "outputTokens": 70,
+            "cacheReadInputTokens": 119453,
+            "cacheCreationInputTokens": 4090,
+            "webSearchRequests": 0,
+            "costUSD": 0.01023865,
+            "contextWindow": 1000000,
+            "maxOutputTokens": 128000,
+            "thinkingTokens": 0,
+            "cacheCreationEphemeral5mInputTokens": 0,
+            "cacheCreationEphemeral1hInputTokens": 4090,
+            "canonicalModel": "claude-haiku-5-5",
+            "provider": "firstParty",
+            "costBasis": "list"
+          }
+        },
+        "duration_ms": 1055
+      },
+      "single": {
+        "start_utc": "2026-11-11T11:44:46.274654+00:00",
+        "end_utc": "2026-11-11T11:44:51.224791+00:00",
+        "system": "You are the working assistant deciding whether to send a mid-task update. Send only if a real user-relevant milestone, unexpected delay, blocker, needed input or change of plan warrants it. Otherwise output exactly SKIP. If sending, output only a concise casual text. Use only the supplied evidence; do not invent facts.",
+        "user": "User: Please book my appointment for Friday. Ask me if you need a choice.\nEvidence so far: The booking page offers Friday at 10:00 AM or 2:00 PM. Neither time has been selected, and the site requires selecting one to continue. No booking has been made.\nCandidate update: Quick update: I found Friday's openings on the booking page, 10:00 AM and 2:00 PM, and nothing is booked yet. Which time would you like, 10:00 AM or 2:00 PM?",
+        "result": "Found Friday's openings on the booking page: 10:00 AM and 2:00 PM. Nothing's booked yet. Which one do you want?",
+        "modelUsage": {
+          "claude-haiku-5-5": {
+            "inputTokens": 2,
+            "outputTokens": 211,
+            "cacheReadInputTokens": 119405,
+            "cacheCreationInputTokens": 4270,
+            "webSearchRequests": 0,
+            "costUSD": 0.01076875,
+            "contextWindow": 1000000,
+            "maxOutputTokens": 128000,
+            "thinkingTokens": 162,
+            "cacheCreationEphemeral5mInputTokens": 0,
+            "cacheCreationEphemeral1hInputTokens": 4270,
+            "canonicalModel": "claude-haiku-5-5",
+            "provider": "firstParty",
+            "costBasis": "list"
+          }
+        },
+        "duration_ms": 1799
+      },
+      "mecha_judge": {
+        "start_utc": "2026-11-11T11:44:51.224987+00:00",
+        "end_utc": "2026-11-11T11:44:55.825499+00:00",
+        "system": "Hayk asked his assistant Mecha to do a task over iMessage and it is still working. The typing indicator already shows it is busy. Below is a mid-task message Mecha wants to send. Decide if Hayk would actually want it right now: YES only if it says the task is taking longer than expected, hits a real milestone he cares about, needs his input, or changes the plan. NO for narration of steps, tool or command talk, file paths, 'now I'll do X', or anything that can wait for the final answer. If NO, output exactly SKIP. If YES, output the update rewritten as one short casual text (under 20 words, plain text, first person, no jargon).",
+        "user": "Quick update: I found Friday's openings on the booking page, 10:00 AM and 2:00 PM, and nothing is booked yet. Which time would you like, 10:00 AM or 2:00 PM?",
+        "result": "Found Friday openings: 10:00 AM or 2:00 PM, both still free. Which one do you want?",
+        "modelUsage": {
+          "claude-haiku-5-5": {
+            "inputTokens": 2,
+            "outputTokens": 220,
+            "cacheReadInputTokens": 119405,
+            "cacheCreationInputTokens": 4279,
+            "webSearchRequests": 0,
+            "costUSD": 0.01080025,
+            "contextWindow": 1000000,
+            "maxOutputTokens": 128000,
+            "thinkingTokens": 183,
+            "cacheCreationEphemeral5mInputTokens": 0,
+            "cacheCreationEphemeral1hInputTokens": 4279,
+            "canonicalModel": "claude-haiku-5-5",
+            "provider": "firstParty",
+            "costBasis": "list"
+          }
+        },
+        "duration_ms": 1565
+      },
+      "mecha_gate_simulated_output": "Found Friday openings: 10:00 AM or 2:00 PM, both still free. Which one do you want?"
+    }
+  ]
+}
