@@ -1,6 +1,6 @@
 import pytest
 
-from overseer.interim import interim_message
+from butler.interim import interim_message
 
 
 def test_judge_prose_is_never_emitted():
@@ -29,7 +29,7 @@ def test_invalid_negative_or_failed_decisions_are_not_emitted(output):
 
 
 def test_owned_post_never_posts_exact_leaked_judge_prose():
-    from overseer.interim import post_judged_interim
+    from butler.interim import post_judged_interim
     class Context:
         def __init__(self): self.sent = []
         def post_message(self, text): self.sent.append(text)
@@ -39,7 +39,7 @@ def test_owned_post_never_posts_exact_leaked_judge_prose():
 
 
 def test_owned_post_sends_only_approved_message_and_fails_closed_on_judge_error():
-    from overseer.interim import post_judged_interim
+    from butler.interim import post_judged_interim
     class Context:
         def __init__(self): self.sent = []
         def post_message(self, text): self.sent.append(text); return 'handle'

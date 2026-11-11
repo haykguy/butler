@@ -7,7 +7,7 @@ def _default_store():
     # Deferred: registration itself must not create data or depend on a live profile.
     from plugins.plugin_storage import plugin_data_dir
     from .store import ResponsibilityStore
-    return ResponsibilityStore(plugin_data_dir('overseer') / 'responsibilities.sqlite3')
+    return ResponsibilityStore(plugin_data_dir('butler') / 'responsibilities.sqlite3')
 
 
 def register_tools(ctx, store_factory=None, session_provider=None):
@@ -35,8 +35,8 @@ def register_tools(ctx, store_factory=None, session_provider=None):
             if hasattr(store, 'close'):
                 store.close()
 
-    schema = {'name': 'overseer_create', 'description': 'Record a responsibility the user authorized. The agent decides what to do; this does not send messages or perform the task.', 'parameters': {'type': 'object', 'properties': {'title': {'type': 'string'}, 'due_at': {'type': 'string', 'description': 'ISO 8601 datetime including UTC offset'}}, 'required': ['title', 'due_at'], 'additionalProperties': False}}
-    ctx.register_tool(name='overseer_create', toolset='overseer', schema=schema, handler=create, description=schema['description'])
+    schema = {'name': 'butler_create', 'description': 'Record a responsibility the user authorized. The agent decides what to do; this does not send messages or perform the task.', 'parameters': {'type': 'object', 'properties': {'title': {'type': 'string'}, 'due_at': {'type': 'string', 'description': 'ISO 8601 datetime including UTC offset'}}, 'required': ['title', 'due_at'], 'additionalProperties': False}}
+    ctx.register_tool(name='butler_create', toolset='butler', schema=schema, handler=create, description=schema['description'])
 
     def manage(args, **kwargs):
         action, item_id = args.get('action'), args.get('id')
@@ -67,5 +67,5 @@ def register_tools(ctx, store_factory=None, session_provider=None):
             if hasattr(store, 'close'):
                 store.close()
 
-    schema = {'name': 'overseer_manage', 'description': 'Inspect or update an existing responsibility at the user or agent’s direction. No external actions are executed.', 'parameters': {'type': 'object', 'properties': {'action': {'type': 'string', 'enum': ['list', 'get', 'pause', 'resume', 'stop', 'complete', 'snooze']}, 'id': {'type': 'string'}, 'until': {'type': 'string', 'description': 'Timezone-aware ISO 8601 datetime for snooze'}}, 'required': ['action'], 'additionalProperties': False}}
-    ctx.register_tool(name='overseer_manage', toolset='overseer', schema=schema, handler=manage, description=schema['description'])
+    schema = {'name': 'butler_manage', 'description': 'Inspect or update an existing responsibility at the user or agent’s direction. No external actions are executed.', 'parameters': {'type': 'object', 'properties': {'action': {'type': 'string', 'enum': ['list', 'get', 'pause', 'resume', 'stop', 'complete', 'snooze']}, 'id': {'type': 'string'}, 'until': {'type': 'string', 'description': 'Timezone-aware ISO 8601 datetime for snooze'}}, 'required': ['action'], 'additionalProperties': False}}
+    ctx.register_tool(name='butler_manage', toolset='butler', schema=schema, handler=manage, description=schema['description'])

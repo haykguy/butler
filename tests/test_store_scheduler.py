@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-from overseer.store import ResponsibilityStore
+from butler.store import ResponsibilityStore
 
 
 def test_finish_claim_checks_expiry_after_waiting_for_write_lock():
@@ -97,7 +97,7 @@ def test_finish_claim_explicitly_submits_not_completes():
 
     def test_scheduler_claims_are_fenced_and_recovery_bounded(self):
         from datetime import timedelta
-        from overseer.scheduler import Scheduler
+        from butler.scheduler import Scheduler
         with TemporaryDirectory(dir=Path(__file__).parent) as directory:
             path = Path(directory) / 'store.sqlite'
             a = ResponsibilityStore(path)

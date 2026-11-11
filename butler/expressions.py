@@ -92,12 +92,12 @@ def register_expression_tools(ctx, session_provider=None):
     description = ('Inspect channel capabilities or use installed imessage-native tools in the active photon chat. '
                    'Provide exact active chat_id and explicit message_id for reactions and replies. '
                    'Telegram operations currently require an adapter bridge; no fallback send is performed.')
-    schema = {'name': 'overseer_expression', 'description': description,
+    schema = {'name': 'butler_expression', 'description': description,
               'parameters': {'type': 'object', 'properties': {
                   'action': {'type': 'string', 'enum': ['capabilities', 'react', 'reply', 'effect']},
                   'chat_id': {'type': 'string'}, 'message_id': {'type': 'string'},
                   'emoji': {'type': 'string'}, 'remove': {'type': 'boolean'},
                   'text': {'type': 'string'}, 'effect': {'type': 'string'}},
                   'required': ['action'], 'additionalProperties': False}}
-    ctx.register_tool(name='overseer_expression', toolset='overseer', schema=schema,
+    ctx.register_tool(name='butler_expression', toolset='butler', schema=schema,
                       handler=handle, description=description)

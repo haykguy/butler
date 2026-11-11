@@ -1,1 +1,0 @@
-"""Overseer responsibility management."""

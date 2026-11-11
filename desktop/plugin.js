@@ -16,7 +16,7 @@ function Page({ ctx }) {
   const [busy, setBusy] = useState(false);
 
   const refreshState = (aliveGuard = () => true) =>
-    ctx.rest.get('/api/plugins/overseer/state')
+    ctx.rest.get('/api/plugins/butler/state')
       .then(data => {
         if (!aliveGuard()) return;
         setPrefs(data.settings);
@@ -29,7 +29,7 @@ function Page({ ctx }) {
           hermes_live_config: data.hermes_live_config || null,
         });
       })
-      .catch(err => { if (aliveGuard()) setError(err?.message || 'Could not load Overseer state.'); });
+      .catch(err => { if (aliveGuard()) setError(err?.message || 'Could not load Butler state.'); });
 
   useEffect(() => {
     let alive = true;
@@ -43,7 +43,7 @@ function Page({ ctx }) {
   const detectTimezone = async (useIp) => {
     setBusy(true); setError(''); setMessage('');
     try {
-      const res = await ctx.rest.post('/api/plugins/overseer/detect-timezone', { use_ip: Boolean(useIp) });
+      const res = await ctx.rest.post('/api/plugins/butler/detect-timezone', { use_ip: Boolean(useIp) });
       const zone = res.suggested_timezone || '';
       if (zone) {
         setPrefs(current => ({ ...current, timezone: zone }));
@@ -63,7 +63,7 @@ function Page({ ctx }) {
   const applyQuietPreset = async () => {
     setBusy(true); setError(''); setMessage('');
     try {
-      const res = await ctx.rest.post('/api/plugins/overseer/preset', { preset: 'quiet_human' });
+      const res = await ctx.rest.post('/api/plugins/butler/preset', { preset: 'quiet_human' });
       setPrefs(res.settings);
       await refreshState();
       setMessage('Applied Quiet Human Texting preset and synced notification/load controls to Hermes config.');
@@ -77,7 +77,7 @@ function Page({ ctx }) {
   const save = async () => {
     setBusy(true); setError(''); setMessage('');
     try {
-      const saved = await ctx.rest.put('/api/plugins/overseer/settings', prefs);
+      const saved = await ctx.rest.put('/api/plugins/butler/settings', prefs);
       setPrefs(saved);
       await refreshState();
       setMessage(saved.applySystemControls
@@ -101,7 +101,7 @@ function Page({ ctx }) {
     h('input', { type: 'checkbox', checked: Boolean(prefs[key]), onChange: e => set(key, e.target.checked) }), ' ', label);
 
   return h('div', { style: { padding: 24, maxWidth: 820 } },
-    h('h1', null, 'Overseer — Proactive Assistant'),
+    h('h1', null, 'Butler — Proactive Assistant'),
     error && h('p', { role: 'alert' }, error),
     !prefs && !error && h('p', null, 'Loading...'),
 
@@ -145,7 +145,7 @@ function Page({ ctx }) {
       select('Tone', 'tone', ['Gentle', 'Supportive', 'Balanced', 'Direct', 'Strict']), select('Persistence', 'persistence', ['Minimal', 'Occasional', 'Regular', 'Persistent']),
       field('Daily limit', 'dailyLimit', 'number', { min: 0, max: 1000, step: 1 }),
       toggle('Quiet hours preference', 'quietEnabled'), field('From', 'quietStart', 'time'), field('To', 'quietEnd', 'time'),
-      toggle('Pause Overseer (stops event collection & live turn injection)', 'paused'),
+      toggle('Pause Butler (stops event collection & live turn injection)', 'paused'),
       toggle('Allow event collection when plugin opt-in is also enabled', 'activityEnabled'), toggle('Wake notifications preference (wake scheduler disabled)', 'notificationsEnabled'),
       h('button', { type: 'button', disabled: busy, onClick: save }, 'Save preferences'), h('p', { role: 'status' }, message)));
 }
@@ -154,7 +154,7 @@ function ProfilePage({ ctx }) {
   return h(Page, { key: String(profile), ctx });
 }
 export default {
-  id: 'overseer', name: 'Proactive Assistant', defaultEnabled: false,
+  id: 'butler', name: 'Proactive Assistant', defaultEnabled: false,
   register(ctx) {
     ctx.register({ id: 'page', area: ROUTES_AREA, data: { path: '/proactive-assistant' }, render: () => h(ProfilePage, { ctx }) });
     ctx.register({ id: 'nav', area: SIDEBAR_NAV_AREA, data: { path: '/proactive-assistant', label: 'Proactive Assistant', codicon: 'sparkle' } });

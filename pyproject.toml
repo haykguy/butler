@@ -1,5 +1,5 @@
 [project]
-name = "hermes-overseer"
+name = "hermes-butler"
 version = "0.2.0"
 description = "Proactive assistant controls for Hermes Agent: live local-time & session-lifetime awareness, system notification/load controls, durable responsibilities, and privacy-first guardrails."
 readme = "README.md"

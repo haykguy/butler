@@ -68,7 +68,7 @@ class EventHooks:
                 timestamp = existing[0] if existing else datetime.now(timezone.utc).isoformat()
                 ledger.append(Event(profile, platform, scope, event_id, 'incoming', 'accepted', timestamp, text))
         except Exception:
-            log.exception('Overseer could not record an admitted message')
+            log.exception('Butler could not record an admitted message')
         return None
 
     def pre_llm_call(self, *, session_id='', platform='', **kwargs):
@@ -105,14 +105,14 @@ class EventHooks:
                      'Only the last 7 days; this is not a complete history.')
             return {'context': intro + '\n' + json.dumps(data, ensure_ascii=True)}
         except Exception:
-            log.exception('Overseer could not read event context')
+            log.exception('Butler could not read event context')
             return None
 
 
 def register_event_hooks(ctx):
     def directory():
         from plugins.plugin_storage import plugin_data_dir
-        return plugin_data_dir('overseer')
+        return plugin_data_dir('butler')
     hooks = EventHooks(lambda: directory() / 'events.sqlite3', lambda: str(directory().resolve()),
                        enabled=lambda: (ctx.get_config('collect_event_history', False) is True
                                         and Policy(directory()).capture_allowed()))

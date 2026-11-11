@@ -45,7 +45,7 @@ def should_notify(notice: Notification, preferences: NotificationPreferences,
 
 
 def build_hermes_config_patch(settings: dict, existing_config: dict | None = None) -> tuple[dict, set[tuple[str, ...]]]:
-    """Build a partial Hermes config dict and preserve_keys set from Overseer controls."""
+    """Build a partial Hermes config dict and preserve_keys set from Butler controls."""
     existing = existing_config if isinstance(existing_config, dict) else {}
     suppress_warn = bool(settings.get('suppressWarningNotifications', True))
     tool_progress = settings.get('toolProgressMode', 'off')
@@ -188,7 +188,7 @@ def read_hermes_load_state(*, config_loader=None) -> dict:
 
 
 def apply_system_controls_to_hermes(settings: dict, *, config_loader=None, config_saver=None) -> dict:
-    """Write Overseer notification/load controls into the active profile's config.yaml."""
+    """Write Butler notification/load controls into the active profile's config.yaml."""
     loader, saver = config_loader, config_saver
     if loader is None or saver is None:
         try:

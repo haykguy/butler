@@ -9,9 +9,9 @@ from datetime import datetime, timezone
 
 import pytest
 
-from overseer.context import ConversationContext, ObservedEvent
-from overseer.interim import interim_message
-from overseer.notifications import Notification, NotificationPreferences, should_notify
+from butler.context import ConversationContext, ObservedEvent
+from butler.interim import interim_message
+from butler.notifications import Notification, NotificationPreferences, should_notify
 
 
 @dataclass(frozen=True)

@@ -1,8 +1,8 @@
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 
-from overseer.settings import defaults, save
-from overseer.policy import Policy
+from butler.settings import defaults, save
+from butler.policy import Policy
 
 
 def test_opt_in_pause_and_daily_reservations(tmp_path):

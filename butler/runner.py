@@ -23,14 +23,14 @@ class Runner:
             try:
                 self.tick()
             except Exception:
-                log.exception('Overseer scheduler tick failed')
+                log.exception('Butler scheduler tick failed')
             self._stop.wait(self.poll_seconds)
 
     def start(self, **kwargs):
         with self._lock:
             if self._stop.is_set() or (self._thread and self._thread.is_alive()):
                 return
-            self._thread = threading.Thread(target=self._run, name='overseer-scheduler', daemon=True)
+            self._thread = threading.Thread(target=self._run, name='butler-scheduler', daemon=True)
             self._thread.start()
 
     def close(self):
@@ -38,4 +38,4 @@ class Runner:
         if self._thread and self._thread is not threading.current_thread():
             self._thread.join(timeout=5)
             if self._thread.is_alive():
-                log.warning('Overseer scheduler did not stop within 5 seconds')
+                log.warning('Butler scheduler did not stop within 5 seconds')

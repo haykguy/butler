@@ -1,7 +1,7 @@
 import json
 
 import pytest
-from overseer.expressions import register_expression_tools
+from butler.expressions import register_expression_tools
 
 
 class Bridge:
@@ -29,7 +29,7 @@ def invoke(bridge, **kwargs):
 
 
 def test_registration_and_capabilities(bridge):
-    assert bridge.tool['name'] == 'overseer_expression'
+    assert bridge.tool['name'] == 'butler_expression'
     assert invoke(bridge, action='capabilities')['capabilities'] == {'react': True, 'reply': True, 'effect': True}
     assert not bridge.calls
 

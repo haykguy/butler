@@ -1,7 +1,7 @@
-name: overseer
+name: butler
 version: 0.2.0
-description: Proactive assistant controls with live local-time and session-lifetime awareness, Hermes system notification/load controls, responsibility persistence, and opt-in DM event capture.
-author: Overseer contributors
+description: "Butler — the proactive personal assistant for Hermes Agent. Messages you first, acts on webhooks, tracks commitments, calls when urgent, with live local-time awareness and privacy-first guardrails."
+author: Butler contributors
 kind: standalone
 requires_hermes: '>=0.23.1'
 config_schema:
@@ -10,10 +10,10 @@ config_schema:
     default: false
     description: Opt in to plaintext admitted DM event collection; records do not expire automatically and replay is disabled pending an authenticated session identity API.
 provides_tools:
-  - overseer_create
-  - overseer_manage
-  - overseer_expression
-  - overseer_controls
+  - butler_create
+  - butler_manage
+  - butler_expression
+  - butler_controls
 provides_hooks:
   - post_gateway_admission
   - pre_llm_call

@@ -4,8 +4,8 @@ from datetime import datetime, timezone
 
 import pytest
 
-from overseer.awareness import AwarenessHooks, register_awareness_and_controls
-from overseer.context import (
+from butler.awareness import AwarenessHooks, register_awareness_and_controls
+from butler.context import (
     build_lifetime_awareness_context,
     detect_ip_timezone,
     detect_system_timezone,
@@ -13,12 +13,12 @@ from overseer.context import (
     resolve_effective_timezone,
     summarize_session_lifetime,
 )
-from overseer.notifications import (
+from butler.notifications import (
     apply_system_controls_to_hermes,
     build_hermes_config_patch,
     summarize_hermes_config,
 )
-from overseer.settings import defaults, load, quiet_human_preset, save
+from butler.settings import defaults, load, quiet_human_preset, save
 
 
 class FakeContext:
@@ -100,7 +100,7 @@ def test_session_lifetime_summary_and_context_injection(tmp_path):
     )
     assert injected is not None
     ctx_text = injected['context']
-    assert '[Overseer Live Time & Session Lifetime on photon]' in ctx_text
+    assert '[Butler Live Time & Session Lifetime on photon]' in ctx_text
     assert '2026-11-11 08:30:00' in ctx_text
     assert 'America/Chicago' in ctx_text
     assert 'session age 2h' in ctx_text
@@ -159,7 +159,7 @@ def test_hermes_load_controls_patch_and_tool_privacy_boundary(tmp_path):
         ip_tz_fn=lambda: 'America/Chicago',
         system_tz_fn=lambda: 'America/Chicago',
     )
-    handler = ctx.tools['overseer_controls']['handler']
+    handler = ctx.tools['butler_controls']['handler']
 
     # Timezone detection onboarding (OS only vs IP)
     det_local = json.loads(handler({'action': 'detect_timezone'}))

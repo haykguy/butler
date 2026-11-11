@@ -1,14 +1,14 @@
 import json
 from datetime import datetime, timezone
-from overseer.events import Event, EventLedger
-from overseer.event_hooks import EventHooks, conversation_key
+from butler.events import Event, EventLedger
+from butler.event_hooks import EventHooks, conversation_key
 
 
 def test_registered_hooks_require_plugin_opt_in_and_live_profile_policy(tmp_path, monkeypatch):
     import sys
     import types
-    from overseer.event_hooks import register_event_hooks
-    from overseer.settings import defaults, save
+    from butler.event_hooks import register_event_hooks
+    from butler.settings import defaults, save
 
     storage = types.ModuleType('plugins.plugin_storage')
     storage.plugin_data_dir = lambda _: tmp_path
@@ -48,7 +48,7 @@ def test_registered_hooks_require_plugin_opt_in_and_live_profile_policy(tmp_path
 def test_default_identity_never_trusts_environment(monkeypatch):
     import sys
     import types
-    from overseer.event_hooks import session_identity
+    from butler.event_hooks import session_identity
     gateway = types.ModuleType('gateway')
     gateway.__path__ = []
     context = types.ModuleType('gateway.session_context')

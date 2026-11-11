@@ -8,9 +8,9 @@ from fastapi import APIRouter, HTTPException
 from plugins.plugin_storage import plugin_data_dir
 
 
-def _load_overseer_modules():
-    pkg_dir = Path(__file__).resolve().parents[1] / 'overseer'
-    pkg_name = '_overseer_dashboard_pkg'
+def _load_butler_modules():
+    pkg_dir = Path(__file__).resolve().parents[1] / 'butler'
+    pkg_name = '_butler_dashboard_pkg'
     if pkg_name not in sys.modules:
         pkg_spec = importlib.util.spec_from_file_location(
             pkg_name, pkg_dir / '__init__.py', submodule_search_locations=[str(pkg_dir)],
@@ -31,7 +31,7 @@ def _load_overseer_modules():
     return loaded['settings'], loaded['context'], loaded['notifications']
 
 
-_settings, _context, _notifications = _load_overseer_modules()
+_settings, _context, _notifications = _load_butler_modules()
 _config_loader = None
 _config_saver = None
 _sys_tz_fn = None
@@ -49,7 +49,7 @@ def _detect_ip_tz():
 
 @router.get('/state')
 def state():
-    directory = plugin_data_dir('overseer')
+    directory = plugin_data_dir('butler')
     settings = _settings.load(directory)
     live_cfg = _notifications.read_hermes_load_state(config_loader=_config_loader)
     sys_tz = _detect_sys_tz()
@@ -83,7 +83,7 @@ def state():
 @router.put('/settings')
 def save_settings(data: dict):
     try:
-        saved = _settings.save(plugin_data_dir('overseer'), data)
+        saved = _settings.save(plugin_data_dir('butler'), data)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     if saved.get('applySystemControls'):
@@ -108,7 +108,7 @@ def detect_timezone(payload: dict | None = None):
 @router.post('/preset')
 def apply_preset(payload: dict):
     preset = (payload or {}).get('preset')
-    directory = plugin_data_dir('overseer')
+    directory = plugin_data_dir('butler')
     current = _settings.load(directory)
     if preset == 'quiet_human':
         updated = _settings.quiet_human_preset(current)

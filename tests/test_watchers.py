@@ -3,7 +3,7 @@ import sqlite3
 import threading
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from overseer.watchers import WatchPolicy, WatcherEngine
+from butler.watchers import WatchPolicy, WatcherEngine
 
 
 class WatcherTests(unittest.TestCase):
@@ -66,7 +66,7 @@ class WatcherTests(unittest.TestCase):
             self.assertEqual(results['second'].previous_digest, results['first'].digest)
 
     def test_file_change_baseline_and_persistent_state(self):
-        from overseer.store import ResponsibilityStore
+        from butler.store import ResponsibilityStore
         with TemporaryDirectory(dir=Path(__file__).parent) as d:
             root = Path(d).resolve()
             target = root / 'value.txt'

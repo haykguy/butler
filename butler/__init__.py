@@ -1,0 +1,1 @@
+"""Butler responsibility management."""

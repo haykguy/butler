@@ -1,4 +1,4 @@
-from overseer.events import Event, EventLedger
+from butler.events import Event, EventLedger
 
 
 def test_uncommitted_events_replay_after_restart(tmp_path):
@@ -18,7 +18,7 @@ def test_uncommitted_events_replay_after_restart(tmp_path):
 from dataclasses import replace
 from concurrent.futures import ThreadPoolExecutor
 import pytest
-from overseer.events import Batch, CheckpointConflict, EventConflict, LedgerFull
+from butler.events import Batch, CheckpointConflict, EventConflict, LedgerFull
 
 
 def event(id="1", **changes):

@@ -1,4 +1,4 @@
-"""Live time/lifetime pre_llm_call hook and overseer_controls agent tool."""
+"""Live time/lifetime pre_llm_call hook and butler_controls agent tool."""
 from datetime import datetime, timezone
 import json
 import logging
@@ -39,7 +39,7 @@ _CONTROLS_SCHEMA = {
         },
         'settings': {
             'type': 'object',
-            'description': 'For update: partial Overseer settings to update (e.g. timezone, lifetimeAwarenessEnabled, applySystemControls, suppressWarningNotifications, toolProgressMode, interimAssistantMessages, busyAckNotifications, longRunningNotifications, backgroundProcessNotifications, memoryNotifications, skillNudgesEnabled, gatewayRestartNotifications, gatewayMessageTimestamps, naturalStatusStyle, tone, persistence, quietEnabled, quietStart, quietEnd, dailyLimit, paused).',
+            'description': 'For update: partial Butler settings to update (e.g. timezone, lifetimeAwarenessEnabled, applySystemControls, suppressWarningNotifications, toolProgressMode, interimAssistantMessages, busyAckNotifications, longRunningNotifications, backgroundProcessNotifications, memoryNotifications, skillNudgesEnabled, gatewayRestartNotifications, gatewayMessageTimestamps, naturalStatusStyle, tone, persistence, quietEnabled, quietStart, quietEnd, dailyLimit, paused).',
         },
     },
     'required': ['action'],
@@ -49,7 +49,7 @@ _CONTROLS_SCHEMA = {
 
 def _default_directory():
     from plugins.plugin_storage import plugin_data_dir
-    return plugin_data_dir('overseer')
+    return plugin_data_dir('butler')
 
 
 class AwarenessHooks:
@@ -82,7 +82,7 @@ class AwarenessHooks:
                 return None
             return {'context': text}
         except Exception:
-            log.exception('Overseer could not build lifetime awareness context')
+            log.exception('Butler could not build lifetime awareness context')
             return None
 
 
@@ -170,7 +170,7 @@ def register_awareness_and_controls(
                 if forbidden:
                     return json.dumps({
                         'ok': False,
-                        'error': f'Disallowed or unknown setting(s): {", ".join(forbidden)}. Privacy-gated capture/wake switches must be changed by the user in Overseer Preferences.',
+                        'error': f'Disallowed or unknown setting(s): {", ".join(forbidden)}. Privacy-gated capture/wake switches must be changed by the user in Butler Preferences.',
                     })
                 candidate = dict(current)
                 candidate.update(patch)
@@ -186,12 +186,12 @@ def register_awareness_and_controls(
             return json.dumps({'ok': False, 'error': str(exc)})
 
     ctx.register_tool(
-        name='overseer_controls',
-        toolset='overseer',
+        name='butler_controls',
+        toolset='butler',
         schema=_CONTROLS_SCHEMA,
         handler=controls,
         description=(
-            'Inspect or update Overseer live time/timezone awareness (including local OS or opt-in IP timezone detection for onboarding) '
+            'Inspect or update Butler live time/timezone awareness (including local OS or opt-in IP timezone detection for onboarding) '
             'and Hermes system notification / load controls (muting provider fallback/rate-limit warnings, tool progress spam, interim narration, '
             'skill creation nudges, memory notices, and static gateway restart banners).'
         ),

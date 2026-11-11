@@ -1,11 +1,11 @@
 """Hermes plugin entry point."""
 import threading
 
-from .overseer.awareness import register_awareness_and_controls
-from .overseer.tools import register_tools
-from .overseer.expressions import register_expression_tools
-from .overseer.runner import Runner
-from .overseer.event_hooks import register_event_hooks
+from .butler.awareness import register_awareness_and_controls
+from .butler.tools import register_tools
+from .butler.expressions import register_expression_tools
+from .butler.runner import Runner
+from .butler.event_hooks import register_event_hooks
 
 
 def register(ctx):
@@ -23,8 +23,8 @@ def register(ctx):
                 return
             if 'runner' not in state:
                 from plugins.plugin_storage import plugin_data_dir
-                from .overseer.store import ResponsibilityStore
-                path = plugin_data_dir('overseer') / 'responsibilities.sqlite3'
+                from .butler.store import ResponsibilityStore
+                path = plugin_data_dir('butler') / 'responsibilities.sqlite3'
                 state['runner'] = Runner(ctx, lambda: ResponsibilityStore(path))
             state['runner'].start()
     def close():

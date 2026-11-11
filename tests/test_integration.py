@@ -3,10 +3,10 @@ import json
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from overseer.runner import Runner
-from overseer.store import ResponsibilityStore
-from overseer.tools import register_tools
-from overseer.expressions import register_expression_tools
+from butler.runner import Runner
+from butler.store import ResponsibilityStore
+from butler.tools import register_tools
+from butler.expressions import register_expression_tools
 
 
 class Context:
@@ -65,7 +65,7 @@ def test_default_tool_route_fails_closed_even_if_environment_claims_session(tmp_
     ctx = Context()
     factory = lambda: ResponsibilityStore(tmp_path / 'db.sqlite')
     register_tools(ctx, factory)
-    result = json.loads(ctx.tools['overseer_create']({'title': 'Review', 'due_at': '2020-01-01T00:00:00Z'}))
+    result = json.loads(ctx.tools['butler_create']({'title': 'Review', 'due_at': '2020-01-01T00:00:00Z'}))
     assert 'unavailable' in result['wake']
     assert not result['responsibility']['metadata'].get('session_key')
     Runner(ctx, factory).tick()
@@ -75,14 +75,14 @@ def test_default_tool_route_fails_closed_even_if_environment_claims_session(tmp_
 def test_telegram_expression_refuses():
     ctx = Context()
     register_expression_tools(ctx, lambda: ('telegram', '123'))
-    result = json.loads(ctx.tools['overseer_expression']({'action': 'reply', 'chat_id': '123', 'message_id': 'x', 'text': 'hi'}))
+    result = json.loads(ctx.tools['butler_expression']({'action': 'reply', 'chat_id': '123', 'message_id': 'x', 'text': 'hi'}))
     assert result['ok'] is False
     assert 'unsupported' in result['error']
 
 
 def test_entrypoint_registers_declared_tools_and_lifecycle():
     root = Path(__file__).resolve().parents[1]
-    spec = importlib.util.spec_from_file_location('overseer_plugin_test', root / '__init__.py', submodule_search_locations=[str(root)])
+    spec = importlib.util.spec_from_file_location('butler_plugin_test', root / '__init__.py', submodule_search_locations=[str(root)])
     module = importlib.util.module_from_spec(spec)
     import sys
     sys.modules[spec.name] = module
@@ -90,7 +90,7 @@ def test_entrypoint_registers_declared_tools_and_lifecycle():
         spec.loader.exec_module(module)
         ctx = Context()
         module.register(ctx)
-        assert set(ctx.tools) == {'overseer_create', 'overseer_manage', 'overseer_expression', 'overseer_controls'}
+        assert set(ctx.tools) == {'butler_create', 'butler_manage', 'butler_expression', 'butler_controls'}
         assert set(ctx.hooks) == {'post_gateway_admission', 'pre_llm_call'}
         assert len(ctx.hooks['post_gateway_admission']) == 2
         assert len(ctx.hooks['pre_llm_call']) == 2
@@ -130,6 +130,6 @@ def test_injected_session_provider_cannot_enable_scheduling(tmp_path):
     ctx = Context()
     factory = lambda: ResponsibilityStore(tmp_path / 'db.sqlite')
     register_tools(ctx, factory, lambda: 'agent:default:telegram:dm:123')
-    result = json.loads(ctx.tools['overseer_create']({'title': 'Review', 'due_at': '2020-01-01T00:00:00Z'}))
+    result = json.loads(ctx.tools['butler_create']({'title': 'Review', 'due_at': '2020-01-01T00:00:00Z'}))
     assert 'unavailable' in result['wake']
     assert not result['responsibility']['metadata'].get('session_key')

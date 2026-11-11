@@ -1,5 +1,5 @@
 import pytest
-from overseer.settings import defaults, load, save
+from butler.settings import defaults, load, save
 
 
 def test_desktop_explains_capture_gates_and_limits():
@@ -54,7 +54,7 @@ def test_dashboard_http_roundtrip_and_read_only_responsibilities(tmp_path, monke
     from datetime import datetime, timezone
     from pathlib import Path
     from fastapi.testclient import TestClient
-    from overseer.store import ResponsibilityStore
+    from butler.store import ResponsibilityStore
 
     plugins = types.ModuleType('plugins')
     storage = types.ModuleType('plugins.plugin_storage')
@@ -62,7 +62,7 @@ def test_dashboard_http_roundtrip_and_read_only_responsibilities(tmp_path, monke
     storage.plugin_data_dir = lambda name: active[0]
     monkeypatch.setitem(sys.modules, 'plugins', plugins)
     monkeypatch.setitem(sys.modules, 'plugins.plugin_storage', storage)
-    spec = importlib.util.spec_from_file_location('overseer_test_api', Path(__file__).resolve().parents[1] / 'dashboard' / 'plugin_api.py')
+    spec = importlib.util.spec_from_file_location('butler_test_api', Path(__file__).resolve().parents[1] / 'dashboard' / 'plugin_api.py')
     api = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(api)
     fake_hermes_cfg = {'display': {}, 'platforms': {'photon': {'enabled': True, 'gateway_restart_notification': True}}}
@@ -71,9 +71,9 @@ def test_dashboard_http_roundtrip_and_read_only_responsibilities(tmp_path, monke
     api._sys_tz_fn = lambda: 'America/Chicago'
     api._ip_tz_fn = lambda: 'America/New_York'
     app = fastapi.FastAPI()
-    app.include_router(api.router, prefix='/api/plugins/overseer')
+    app.include_router(api.router, prefix='/api/plugins/butler')
     client = TestClient(app)
-    url = '/api/plugins/overseer'
+    url = '/api/plugins/butler'
     assert client.get(url + '/state').json()['responsibilities'] == []
     assert not (active[0] / 'responsibilities.sqlite3').exists()
     active[0].mkdir()

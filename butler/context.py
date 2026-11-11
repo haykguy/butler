@@ -93,7 +93,7 @@ def detect_ip_timezone(*, urlopen=urllib.request.urlopen, timeout: float = 3.0) 
     )
     for url, mode in endpoints:
         try:
-            req = urllib.request.Request(url, headers={'User-Agent': 'hermes-overseer/0.2'})
+            req = urllib.request.Request(url, headers={'User-Agent': 'hermes-butler/0.2'})
             with urlopen(req, timeout=timeout) as resp:
                 body = resp.read(4096).decode('utf-8', errors='replace').strip()
             if mode == 'json':
@@ -278,10 +278,10 @@ def build_lifetime_awareness_context(
     part = _day_part(local_dt.hour)
 
     source_note = {
-        'profile': 'confirmed in Overseer profile',
+        'profile': 'confirmed in Butler profile',
         'hermes_config': 'from Hermes config.yaml',
         'system_detected': 'auto-detected from host OS (unconfirmed in profile — confirm with user during onboarding if relevant)',
-        'utc_fallback': 'UTC fallback (timezone not set — ask user or call overseer_controls to confirm timezone)',
+        'utc_fallback': 'UTC fallback (timezone not set — ask user or call butler_controls to confirm timezone)',
     }[source]
 
     quiet_state = 'disabled'
@@ -310,7 +310,7 @@ def build_lifetime_awareness_context(
     surface = f' on {platform}' if platform else ''
 
     lines = [
-        f'[Overseer Live Time & Session Lifetime{surface}]',
+        f'[Butler Live Time & Session Lifetime{surface}]',
         f"Local time: {local_dt.strftime('%A, %Y-%m-%d %H:%M:%S')} {tz_abbr} ({offset}, {zone} — {source_note}; {part}).",
         f'{lifetime_line} Use exact elapsed gaps to calibrate pacing—never guess wait durations, acknowledge long/overnight gaps naturally, and stay crisp on rapid exchanges.',
         f'Posture: tone={tone}, persistence={persistence}, quiet_hours={quiet_state}.',
@@ -326,6 +326,6 @@ def build_lifetime_awareness_context(
         f"System notification/load controls ({enforced}): warnings_muted={bool(settings.get('suppressWarningNotifications', True))}, "
         f"tool_progress={settings.get('toolProgressMode', 'off')}, interim_narration={bool(settings.get('interimAssistantMessages', False))}, "
         f"skill_nudges={bool(settings.get('skillNudgesEnabled', False))}, gateway_restart_banner={bool(settings.get('gatewayRestartNotifications', False))}. "
-        'If the user asks to quiet or change system/provider/tool/session notifications or confirm their timezone, use overseer_controls.'
+        'If the user asks to quiet or change system/provider/tool/session notifications or confirm their timezone, use butler_controls.'
     )
     return '\n'.join(lines)
