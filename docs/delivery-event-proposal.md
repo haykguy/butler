@@ -1,6 +1,6 @@
 # Proposal: opt-in delivery observation for Hermes
 
-**Status:** design for upstream discussion; not implemented or supported today. No monkeypatching or edits to a live Hermes installation. Source inspection is of the local checkout `/Users/haykguy/.hermes/hermes-agent` at `3b421578588243f920886e6fe79a6faa87ea026e`; line numbers below are navigation aids, not a claim about other versions. Official documentation index: https://hermes-agent.nousresearch.com/docs/llms.txt.
+**Status:** design for upstream discussion; not implemented or supported today. No monkeypatching or edits to a live Hermes installation. Source inspection is of a local hermes-agent checkout at `3b421578588243f920886e6fe79a6faa87ea026e`; line numbers below are navigation aids, not a claim about other versions. Official documentation index: https://hermes-agent.nousresearch.com/docs/llms.txt.
 
 ## Goal and limits
 

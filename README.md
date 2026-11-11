@@ -9,8 +9,8 @@
 **Butler is a proactive personal assistant plugin for Hermes Agent. It doesn't wait to be summoned. It messages you first, acts on live webhooks, keeps track of your commitments, and rings your phone when something truly matters.**
 
 [![Hermes Compatibility](https://img.shields.io/badge/Hermes_Agent-%3E%3D0.23.1-111111?style=for-the-badge&labelColor=1a1a1a&color=c9a961)](plugin.yaml)
-[![Catalog Validation](https://img.shields.io/badge/Plugin_Validator-16%2F16_Passed-111111?style=for-the-badge&labelColor=1a1a1a&color=c9a961)](plugin.yaml)
-[![Test Suite](https://img.shields.io/badge/Tests-116_Passed-111111?style=for-the-badge&labelColor=1a1a1a&color=c9a961)](tests/)
+[![Catalog Validation](https://img.shields.io/badge/Plugin_Validator-Passed-111111?style=for-the-badge&labelColor=1a1a1a&color=c9a961)](plugin.yaml)
+[![Test Suite](https://img.shields.io/badge/Tests-198_Passed-111111?style=for-the-badge&labelColor=1a1a1a&color=c9a961)](tests/)
 [![Privacy](https://img.shields.io/badge/DM_Capture-Default_OFF_(Dual_Gate)-111111?style=for-the-badge&labelColor=1a1a1a&color=e8dcc4)](#7-defense-in-depth-privacy-consent--fail-closed-security)
 [![License](https://img.shields.io/badge/License-MIT-111111?style=for-the-badge&labelColor=1a1a1a&color=e8dcc4)](LICENSE)
 
@@ -125,10 +125,14 @@ Most accountability tools confuse **rudeness** with **persistence**. Butler give
 
 ## 4. Quick Setup (Under 60 Seconds)
 
-1. **Install Butler** into your Hermes plugins directory (`~/.hermes/plugins/butler`).
-2. **Open Hermes Desktop** and select **Proactive Assistant** in the left sidebar — *or* simply text your Hermes assistant:
+1. **Install Butler:**
+   ```bash
+   hermes plugins install haykguy/butler
+   ```
+2. **Turn on the Desktop page once:** Hermes Desktop keeps a new plugin's sidebar page off until you allow it. Open **Settings → Plugins** and switch on **Proactive Assistant**.
+3. **Open Butler** in the left sidebar and click **Quick setup** — *or* simply text your Hermes assistant:
    > *"Set up Butler for my timezone, turn on Quiet Human Mode, and keep me accountable on my daily goals."*
-3. **Dial in your Tone, Persistence & Quiet Hours**, configure your webhook/call escalation preferences if desired, and click **Save Preferences**.
+4. **Dial in your Tone, Persistence & Quiet Hours**, configure your webhook/call escalation preferences if desired, and click **Save Preferences**.
 
 <br/>
 
@@ -148,7 +152,7 @@ Butler (`v0.3.0`, `requires_hermes: ">=0.23.1"`) is a unified **Hermes Agent + H
 
 ### Engineering Design Principles
 
-1. **Zero Private Core Imports & Zero Monkey-Patching:** Validated with `hermes plugins validate . --json` (**16/16 checks passing, 0 warnings**). Butler imports only sanctioned public interfaces (`plugins.plugin_storage.plugin_data_dir` and `hermes_cli.config.{load_config, save_config}`), never mutating internal gateway routers or core classes at runtime.
+1. **No Monkey-Patching:** `hermes plugins validate .` passes, with no runtime rebinds of Hermes core and a clean security scan. Butler mutates no internal gateway routers or core classes. One known warning: `butler/routes.py` reads three `gateway.session_context` helpers to identify the active route, which are not yet a public plugin API; everything else uses public surfaces (`plugins.plugin_storage.plugin_data_dir`, `hermes_cli.config.{load_config, save_config}`, `ctx.*`).
 2. **Action-First Autonomy Over Static Reminders:** Rather than firing dumb text strings on a cron loop or chaining secondary "judge" prompts that leak deliberation tokens, Butler wakes the primary Hermes agent with structured responsibility, watcher, or webhook context and capability-gated tools (`butler_create`, `butler_manage`, `butler_controls`, `butler_expression`) so the model acts before reaching out.
 3. **Multi-Stage Escalation & Event-Driven Triggers:** Follow-up cadence scales cleanly from light text check-ins and pre-deadline heads-ups to real-time webhook/watcher wakes and urgent voice/phone-call escalation—governed by anti-burst batch coalescing, Quiet Hours, and atomic daily wake caps.
 4. **Fail-Closed Security & Per-Profile Isolation:** Every SQLite store and settings file resolves dynamically inside `plugin_data_dir('butler')` (`~/.hermes/profiles/<profile>/plugin-data/butler/`), and any unauthenticated route or spoofing vector (`HERMES_SESSION_KEY`) fails closed.
