@@ -1,6 +1,6 @@
 {
   "description": "Two predeclared illustrative scenarios. Actual Mecha judge sees only candidate, not original context, matching imessage-plus implementation. Single assessor sees candidate and original evidence. No message delivery.",
-  "judge_source": "desklinux ~/.hermes/plugins/imessage-plus/__init__.py INTERIM_SYSTEM, read-only",
+  "judge_source": "<remote-host> ~/.hermes/plugins/imessage-plus/__init__.py INTERIM_SYSTEM, read-only",
   "cases": [
     {
       "scenario": {

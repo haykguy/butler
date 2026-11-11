@@ -1,6 +1,6 @@
 """Native iMessage operations using the gateway's authenticated Photon sidecar.
 
-Adapted from Mecha's imessage-native plugin by Hayk and contributors.
+Adapted from an imessage-native plugin by Hayk and contributors.
 No adapter monkeypatching, home-channel fallback, or server is used.
 Message-targeted actions remain disabled until the backend proves membership.
 """
