@@ -1,6 +1,8 @@
 """Explicitly driven scheduler; no background thread or Hermes integration."""
 from datetime import datetime, timezone
 
+from .followup import FollowupDecision, WakeBatch, coalesce_due_batch, next_followup_step
+
 
 class Scheduler:
     def __init__(self, store, *, batch_size=10, lease_seconds=300):
@@ -14,3 +16,30 @@ class Scheduler:
 
     def claim(self, now=None):
         return self.store.claim_due(now or datetime.now(timezone.utc), limit=self.batch_size, lease_seconds=self.lease_seconds)
+
+    def claim_and_plan(
+        self,
+        settings: dict | None = None,
+        *,
+        now: datetime | None = None,
+        effective_timezone: str = 'UTC',
+        available_channels: tuple[str, ...] = ('check_in', 'push'),
+    ) -> tuple[list[tuple[dict, FollowupDecision]], list[WakeBatch]]:
+        """Claim due responsibilities and compute per-item follow-up decisions plus coalesced route batches."""
+        current = now or datetime.now(timezone.utc)
+        claimed = self.claim(current)
+        cfg = settings or {}
+        decisions: list[tuple[dict, FollowupDecision]] = [
+            (
+                item,
+                next_followup_step(
+                    item,
+                    current,
+                    cfg,
+                    effective_timezone=effective_timezone,
+                    available_channels=available_channels,
+                ),
+            )
+            for item in claimed
+        ]
+        return decisions, coalesce_due_batch(decisions)

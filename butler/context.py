@@ -248,6 +248,104 @@ def summarize_session_lifetime(conversation_history, now: datetime,
     }
 
 
+def _parse_item_instant(value) -> datetime | None:
+    if isinstance(value, datetime):
+        if value.tzinfo is None or value.utcoffset() is None:
+            return value.replace(tzinfo=dt_timezone.utc)
+        return value.astimezone(dt_timezone.utc)
+    if isinstance(value, str) and value.strip():
+        try:
+            dt = datetime.fromisoformat(value.strip().replace('Z', '+00:00'))
+            if dt.tzinfo is None or dt.utcoffset() is None:
+                dt = dt.replace(tzinfo=dt_timezone.utc)
+            return dt.astimezone(dt_timezone.utc)
+        except ValueError:
+            return None
+    return None
+
+
+def _render_responsibilities_block(
+    active_responsibilities: list[dict],
+    *,
+    local_dt: datetime,
+    zone: str,
+    persistence: str,
+) -> list[str]:
+    today_str = local_dt.strftime('%Y-%m-%d')
+    done_today: list[str] = []
+    open_today: list[str] = []
+    commitments: list[tuple[tuple[int, float, int], str]] = []
+    far_future = datetime(9999, 12, 31, tzinfo=dt_timezone.utc).timestamp()
+
+    for raw in active_responsibilities:
+        if not isinstance(raw, dict):
+            continue
+        status = str(raw.get('status') or 'active')
+        if status == 'stopped':
+            continue
+        kind = str(raw.get('kind') or 'commitment')
+        title = str(raw.get('title') or 'Untitled').strip()
+        item_id = str(raw.get('id') or '')
+        id_tag = f' [id={item_id}]' if item_id else ''
+        due_dt = _parse_item_instant(raw.get('due_at'))
+        deadline_dt = _parse_item_instant(raw.get('deadline_at'))
+
+        if kind == 'non_negotiable':
+            if raw.get('completed_day') == today_str or status == 'completed':
+                done_today.append(f'{title}{id_tag}')
+            elif status != 'paused':
+                due_note = ''
+                if deadline_dt is not None:
+                    due_note = f" (by {local_time(deadline_dt, zone).strftime('%H:%M')})"
+                elif due_dt is not None:
+                    due_note = f" (next {local_time(due_dt, zone).strftime('%H:%M')})"
+                open_today.append(f'{title}{due_note}{id_tag}')
+            continue
+
+        if status in ('completed', 'paused'):
+            continue
+        urgent_dt = deadline_dt or due_dt
+        sort_ts = urgent_dt.timestamp() if urgent_dt is not None else far_future
+        status_rank = 0 if status == 'active' else 1
+        nudge_rank = -int(raw.get('nudge_count') or 0)
+        when_parts: list[str] = []
+        if kind != 'commitment':
+            when_parts.append(kind)
+        if due_dt is not None:
+            when_parts.append(f"due {local_time(due_dt, zone).strftime('%Y-%m-%d %H:%M')}")
+        if deadline_dt is not None:
+            when_parts.append(f"deadline {local_time(deadline_dt, zone).strftime('%Y-%m-%d %H:%M')}")
+        meta_str = f" ({', '.join(when_parts)})" if when_parts else ''
+        commitments.append(((status_rank, sort_ts, nudge_rank), f'{title}{meta_str}{id_tag}'))
+
+    commitments.sort(key=lambda pair: pair[0])
+    top_commitments = [label for _, label in commitments[:8]]
+    extra_count = max(0, len(commitments) - 8)
+
+    if done_today or open_today:
+        done_str = ', '.join(done_today) if done_today else 'none yet'
+        open_str = ', '.join(open_today) if open_today else 'all done for today'
+        nn_line = (
+            f'Daily Non-Negotiables: still open today ({len(open_today)}): {open_str}; '
+            f'done today ({len(done_today)}): {done_str}.'
+        )
+    else:
+        nn_line = 'Daily Non-Negotiables: none tracked yet (still open today: 0; done today: 0).'
+
+    if top_commitments:
+        more_suffix = f' (+{extra_count} more)' if extra_count else ''
+        comm_line = f"Open commitments ({len(commitments)}): {'; '.join(top_commitments)}{more_suffix}."
+    else:
+        comm_line = 'Open commitments (0): none currently open.'
+
+    directive_line = (
+        'Proactive assistant directive: When the user shares a daily non-negotiable, commitment, task to follow up on, '
+        f'or open loop, record it via butler_create (you may omit due_at to let Butler auto-schedule based on persistence={persistence}). '
+        'When the user finishes or reschedules an item, update it immediately via butler_manage so Desktop UI and follow-up nudges stay in sync.'
+    )
+    return [nn_line, comm_line, directive_line]
+
+
 def build_lifetime_awareness_context(
     settings: dict,
     *,
@@ -257,6 +355,7 @@ def build_lifetime_awareness_context(
     platform: str = '',
     config_timezone: str = '',
     system_timezone: str | None = None,
+    active_responsibilities: list[dict] | None = None,
 ) -> str | None:
     """Render per-turn live local time, session lifetime, and notification/style posture."""
     if not isinstance(settings, dict):
@@ -328,4 +427,13 @@ def build_lifetime_awareness_context(
         f"skill_nudges={bool(settings.get('skillNudgesEnabled', False))}, gateway_restart_banner={bool(settings.get('gatewayRestartNotifications', False))}. "
         'If the user asks to quiet or change system/provider/tool/session notifications or confirm their timezone, use butler_controls.'
     )
+    if active_responsibilities is not None:
+        lines.extend(
+            _render_responsibilities_block(
+                active_responsibilities,
+                local_dt=local_dt,
+                zone=zone,
+                persistence=persistence,
+            )
+        )
     return '\n'.join(lines)

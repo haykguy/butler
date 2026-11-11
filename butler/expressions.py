@@ -1,11 +1,27 @@
-"""Opt-in model tools for the current chat; no platform or transport is invented.
-
-Call register_expression_tools(ctx) from the plugin entry point. iMessage uses
-DeskLinux's existing imessage-native tools through the documented plugin SDK
-ctx.dispatch_tool. Telegram's adapter has send(reply_to=...), but no documented
-plugin-tool bridge to its live adapter; it is intentionally not invoked here.
-"""
+"""Opt-in expressions through the local Photon sidecar, with strict targeting."""
 import json
+import os
+from pathlib import Path
+import urllib.request
+
+
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
+
+
+def _sidecar(path, body):
+    """Call the local Photon sidecar using its runtime discovery record."""
+    home = Path(os.environ.get("HERMES_HOME", "~/.hermes")).expanduser()
+    record = json.loads((home / "runtime" / "photon-sidecar.json").read_text())
+    port, token = record["port"], record["token"]
+    if type(port) is not int or not 1 <= port <= 65535 or not isinstance(token, str) or not token:
+        raise ValueError("invalid Photon sidecar record")
+    request = urllib.request.Request(f"http://127.0.0.1:{port}{path}",
+        data=json.dumps(body).encode(), headers={"Content-Type": "application/json",
+        "X-Hermes-Sidecar-Token": token}, method="POST")
+    with urllib.request.build_opener(_NoRedirect()).open(request, timeout=60) as response:
+        return json.loads(response.read())
 
 
 _EFFECTS = frozenset(('slam', 'loud', 'gentle', 'invisible', 'balloons', 'confetti',
@@ -22,10 +38,8 @@ def _session():
 def register_expression_tools(ctx, session_provider=None):
     """Register one tool. session_provider is injectable for isolated tests.
 
-    Only the active photon chat is eligible: imessage-native resolves its target
-    from session context and otherwise falls back to PHOTON_HOME_CHANNEL. Never
-    dispatch when that resolution could choose a different or unspecified chat.
-    Message membership cannot be verified by this SDK and remains a backend check.
+    Only the active photon chat is eligible. Reactions and replies are disabled
+    because the available sidecar does not reliably validate message membership.
     """
     session = session_provider or _session
 
@@ -46,9 +60,9 @@ def register_expression_tools(ctx, session_provider=None):
             return result(ok=False, error='active platform and chat required')
         if action == 'capabilities':
             return result(ok=True, platform=platform, chat_id=chat,
-                          capabilities={'react': platform == 'photon', 'reply': platform == 'photon',
+                          capabilities={'react': False, 'reply': False,
                                         'effect': platform == 'photon'},
-                          note='Photon capabilities require the imessage-native tools to be installed; Telegram requires a supported tool-to-adapter bridge.')
+                          note='Reactions and replies are disabled until message membership can be verified. Effects require a compatible running Photon sidecar.')
         if platform != 'photon':
             return result(ok=False, error='unsupported channel or missing adapter bridge', platform=platform, action=action)
         requested_chat = args.get('chat_id')
@@ -81,15 +95,17 @@ def register_expression_tools(ctx, session_provider=None):
                     return result(ok=False, error='unknown or missing iMessage effect')
                 payload['effect'] = effect
         try:
-            raw = ctx.dispatch_tool('imessage_' + action, payload)
+            if action != 'effect':
+                return result(ok=False, error='message membership cannot be verified safely')
+            raw = _sidecar('/send-effect', {'spaceId': chat, **payload})
             response = json.loads(raw) if isinstance(raw, str) else raw
         except Exception:
-            return result(ok=False, error='imessage-native dispatch unavailable or failed')
+            return result(ok=False, error='Photon sidecar unavailable or failed')
         if not isinstance(response, dict) or not isinstance(response.get('ok'), bool):
-            return result(ok=False, error='invalid response from imessage-native')
+            return result(ok=False, error='invalid response from Photon sidecar')
         return result(**response)
 
-    description = ('Inspect channel capabilities or use installed imessage-native tools in the active photon chat. '
+    description = ('Inspect channel capabilities or send effects through the local Photon sidecar. '
                    'Provide exact active chat_id and explicit message_id for reactions and replies. '
                    'Telegram operations currently require an adapter bridge; no fallback send is performed.')
     schema = {'name': 'butler_expression', 'description': description,

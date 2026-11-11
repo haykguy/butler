@@ -1,5 +1,5 @@
 name: butler
-version: 0.2.0
+version: 0.3.0
 description: "Butler — the proactive personal assistant for Hermes Agent. Messages you first, acts on webhooks, tracks commitments, calls when urgent, with live local-time awareness and privacy-first guardrails."
 author: Butler contributors
 kind: standalone
@@ -13,6 +13,7 @@ provides_tools:
   - butler_create
   - butler_manage
   - butler_expression
+  - butler_imessage
   - butler_controls
 provides_hooks:
   - post_gateway_admission
