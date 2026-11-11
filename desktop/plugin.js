@@ -1,5 +1,5 @@
 import { ROUTES_AREA, SIDEBAR_NAV_AREA, host, useValue } from '@hermes/plugin-sdk';
-import { createElement as h, useEffect, useState } from 'react';
+import { createElement as h, useEffect, useRef, useState } from 'react';
 
 async function createProjectAgents(files, folder, text) {
   if (!files || !folder || !folder.id || typeof text !== 'string' || !text.trim()) throw new Error('Choose a project folder and enter instructions.');
@@ -266,44 +266,7 @@ const styles = {
       border: '1px solid var(--border, rgba(127, 127, 127, 0.28))',
     };
   },
-  pill: (tone = 'neutral') => {
-    const map = {
-      ok: {
-        bg: 'color-mix(in srgb, #459457 16%, transparent)',
-        border: 'color-mix(in srgb, #459457 42%, var(--border, #555))',
-        dot: '#459457',
-      },
-      amber: {
-        bg: 'color-mix(in srgb, #c8872b 16%, transparent)',
-        border: 'color-mix(in srgb, #c8872b 42%, var(--border, #555))',
-        dot: '#c8872b',
-      },
-      muted: {
-        bg: 'color-mix(in srgb, var(--foreground, #888) 8%, transparent)',
-        border: 'var(--border, rgba(127, 127, 127, 0.28))',
-        dot: '#888',
-      },
-      accent: {
-        bg: 'color-mix(in srgb, var(--accent, #507458) 18%, transparent)',
-        border: 'color-mix(in srgb, var(--accent, #507458) 38%, var(--border, #555))',
-        dot: '#507458',
-      },
-    };
-    const chosen = map[tone] || map.muted;
-    return {
-      display: 'inline-flex',
-      alignItems: 'center',
-      gap: 6,
-      padding: '3px 10px',
-      borderRadius: 999,
-      fontSize: 12,
-      fontWeight: 560,
-      background: chosen.bg,
-      border: `1px solid ${chosen.border}`,
-      color: 'var(--foreground, inherit)',
-       dotColor: chosen.dot,
-    };
-  },
+
   input: {
     width: '100%',
     padding: '8px 11px',
@@ -452,27 +415,15 @@ function restCall(ctx, method, path, body) {
   return Promise.reject(new Error('Plugin backend bridge unavailable.'));
 }
 
-function StatusPill({ tone, label }) {
-  const p = styles.pill(tone);
-  const { dotColor, ...pillStyle } = p;
-  return h('span', { style: pillStyle },
-    h('span', {
-      style: {
-        width: 7,
-        height: 7,
-        borderRadius: '50%',
-        background: dotColor,
-        display: 'inline-block',
-      },
-    }),
-    label,
-  );
-}
-
 function Page({ ctx }) {
   const [activeTab, setActiveTab] = useState('overview');
   const [prefs, setPrefs] = useState(null);
-  const [dirtyPrefs, setDirtyPrefs] = useState(false);
+  const [dirtyPrefs, setDirtyPrefsState] = useState(false);
+  // Ref mirrors dirtyPrefs so the long-lived poll closure sees current value.
+  const dirtyRef = useRef(false);
+  // Last settings object confirmed by the backend (no unsaved drafts).
+  const serverPrefsRef = useRef(null);
+  const setDirtyPrefs = (v) => { dirtyRef.current = Boolean(v); setDirtyPrefsState(Boolean(v)); };
   const [stateData, setStateData] = useState({
     responsibilities: [],
     non_negotiables: [],
@@ -524,7 +475,8 @@ function Page({ ctx }) {
 
   const applyIncomingState = (data, preserveDraftPrefs = false) => {
     if (!data) return;
-    if (!preserveDraftPrefs || !dirtyPrefs) {
+    if (data.settings) serverPrefsRef.current = data.settings;
+    if (!preserveDraftPrefs || !dirtyRef.current) {
       setPrefs(data.settings || null);
     }
     const allRows = Array.isArray(data.responsibilities) ? data.responsibilities : [];
@@ -580,12 +532,6 @@ function Page({ ctx }) {
       restCall(ctx, 'GET', '/state')
         .then((data) => {
           if (!alive || !data) return;
-          setDirtyPrefs((currentlyDirty) => {
-            if (!currentlyDirty) {
-              setPrefs(data.settings || null);
-            }
-            return currentlyDirty;
-          });
           applyIncomingState(data, true);
         })
         .catch(() => {});
@@ -623,7 +569,7 @@ function Page({ ctx }) {
     setWizardForm({
       timezone: baseTz,
       applyQuietPreset: true,
-      quietEnabled: prefs ? Boolean(prefs.quietEnabled || true) : true,
+      quietEnabled: prefs ? prefs.quietEnabled !== false : true,
       quietStart: (prefs && prefs.quietStart) || '22:00',
       quietEnd: (prefs && prefs.quietEnd) || '08:00',
       dailyLimit: (prefs && prefs.dailyLimit != null) ? prefs.dailyLimit : 12,
@@ -1118,15 +1064,22 @@ function Page({ ctx }) {
   };
 
   const saveTone = async (toneName) => {
-    if (!prefs) return;
-    const next = { ...prefs, tone: toneName };
-    setPrefs(next);
+    const base = serverPrefsRef.current;
+    if (!base || !TONES.includes(toneName) || busy) return;
+    if (base.tone === toneName) {
+      setPrefs((p) => ({ ...(p || base), tone: toneName }));
+      return;
+    }
+    // Send only the confirmed server settings + new tone so unsaved
+    // Preferences drafts are never persisted as a side effect.
+    const next = { ...base, tone: toneName };
+    setPrefs((p) => ({ ...(p || base), tone: toneName }));
     setBusy(true);
     setError('');
     try {
       const saved = await restCall(ctx, 'PUT', '/settings', next);
-      setDirtyPrefs(false);
-      setPrefs(saved);
+      serverPrefsRef.current = saved;
+      setPrefs((p) => (dirtyRef.current ? { ...(p || saved), tone: saved.tone } : saved));
       setMessage(`Approach set to ${toneName}.`);
     } catch (err) {
       setError((err && err.message) || 'Could not save approach.');
@@ -1136,15 +1089,16 @@ function Page({ ctx }) {
   };
 
   const togglePaused = async () => {
-    if (!prefs) return;
-    const next = { ...prefs, paused: !prefs.paused };
+    const base = serverPrefsRef.current;
+    if (!base) return;
+    const next = { ...base, paused: !base.paused };
     setBusy(true);
     setError('');
     try {
       const saved = await restCall(ctx, 'PUT', '/settings', next);
-      setDirtyPrefs(false);
-      setPrefs(saved);
-      await refreshState(() => true, false);
+      serverPrefsRef.current = saved;
+      setPrefs((p) => (dirtyRef.current ? { ...(p || saved), paused: saved.paused } : saved));
+      await refreshState(() => true, true);
       setMessage(saved.paused ? 'Check-ins paused. Nothing will be sent until you resume.' : 'Check-ins resumed.');
     } catch (err) {
       setError((err && err.message) || 'Could not change pause state.');
@@ -1290,7 +1244,7 @@ function Page({ ctx }) {
                   'aria-label': done ? `Reopen ${item.title}` : `Mark ${item.title} complete`,
                   onClick: () => toggleItemDone(item),
                 }),
-                h('div', { className: 'ovc-essential-text', role: 'button', tabIndex: 0, onClick: () => openEditModal(item), onKeyDown: (e) => { if (e.key === 'Enter') openEditModal(item); } },
+                h('div', { className: 'ovc-essential-text', role: 'button', tabIndex: 0, onClick: () => openEditModal(item), onKeyDown: (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openEditModal(item); } } },
                   h('strong', null, item.title),
                   h('p', null, done ? 'Completed today' : (item.status === 'paused' ? 'Paused' : (item.prep_hint || item.notes || 'Not done yet today.'))),
                 ),
@@ -1306,6 +1260,7 @@ function Page({ ctx }) {
             type: 'text',
             value: quickTitle,
             placeholder: 'Add another daily non-negotiable…',
+            'aria-label': 'New daily non-negotiable',
             onChange: (e) => setQuickTitle(e.target.value),
           }),
           h('button', { type: 'submit', className: 'ovc-btn small', disabled: busy || !quickTitle.trim() }, 'Add'),
@@ -1351,17 +1306,19 @@ function Page({ ctx }) {
               type: 'range', min: 0, max: TONES.length - 1, step: 1, value: toneIdx,
               disabled: busy,
               'aria-label': 'Assistant approach, from gentle to strict',
+              'aria-valuetext': toneVal,
               onChange: (e) => setPrefs((p) => ({ ...(p || {}), tone: TONES[Number(e.target.value)] })),
-              onMouseUp: (e) => saveTone(TONES[Number(e.target.value)]),
-              onTouchEnd: (e) => saveTone(TONES[Number(e.target.value)]),
-              onKeyUp: (e) => saveTone(TONES[Number(e.target.value)]),
+              onPointerUp: (e) => saveTone(TONES[Number(e.target.value)]),
+              onKeyUp: (e) => { if (/^(Arrow|Home|End|Page)/.test(e.key)) saveTone(TONES[Number(e.target.value)]); },
             }),
             h('div', { className: 'ovc-slider-labels' }, TONES.map((t, i) => h('span', {
               key: t,
               className: i === toneIdx ? 'on' : '',
               role: 'button',
               tabIndex: 0,
+              'aria-pressed': i === toneIdx,
               onClick: () => saveTone(t),
+              onKeyDown: (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); saveTone(t); } },
             }, t))),
           ),
           h('div', { className: 'ovc-setting' }, h('b', null, 'Follow-up pace'), h('span', null, persVal)),
@@ -1980,7 +1937,7 @@ function Page({ ctx }) {
           h('span', { style: { fontSize: 12, fontWeight: 620, color: 'var(--muted-foreground, #6e776f)', textTransform: 'uppercase', letterSpacing: '0.05em' } },
             `Quick Setup · Step ${wizardStep} of 4`,
           ),
-          h('button', { type: 'button', disabled: busy, style: styles.btn('mini', busy), onClick: () => setWizardOpen(false) }, '✕'),
+          h('button', { type: 'button', disabled: busy, 'aria-label': 'Close quick setup', style: styles.btn('mini', busy), onClick: () => setWizardOpen(false) }, '✕'),
         ),
         error && h('p', { role: 'alert', style: { color: 'var(--destructive, #c33)' } }, error),
 
@@ -2059,7 +2016,11 @@ function Page({ ctx }) {
                 const info = PERSISTENCE_DETAILS[p];
                 return h('div', {
                   key: p,
+                  role: 'radio',
+                  'aria-checked': selected,
+                  tabIndex: 0,
                   onClick: () => setWizardForm((f) => ({ ...f, persistence: p })),
+                  onKeyDown: (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setWizardForm((f) => ({ ...f, persistence: p })); } },
                   style: {
                     padding: '10px 12px',
                     borderRadius: 10,
@@ -2108,10 +2069,14 @@ function Page({ ctx }) {
                 type: 'text',
                 value: val,
                 placeholder: placeholders[idx] || `Daily non-negotiable #${idx + 1}`,
+                'aria-label': `Daily non-negotiable ${idx + 1}`,
                 onChange: (e) => {
-                  const next = [...wizardForm.nonNegotiables];
-                  next[idx] = e.target.value;
-                  setWizardForm((f) => ({ ...f, nonNegotiables: next }));
+                  const value = e.target.value;
+                  setWizardForm((f) => {
+                    const next = [...f.nonNegotiables];
+                    next[idx] = value;
+                    return { ...f, nonNegotiables: next };
+                  });
                 },
                 style: styles.input,
               });
@@ -2224,7 +2189,7 @@ function Page({ ctx }) {
         error && h('div', { role: 'alert', className: 'ovc-alert err' },
           h('span', null, error), h('button', { type: 'button', className: 'ovc-link', onClick: () => setError('') }, 'Dismiss')),
         message && h('div', { role: 'status', className: 'ovc-alert ok' },
-          h('span', null, message), h('button', { type: 'button', className: 'ovc-link', onClick: () => setMessage('') }, '✕')),
+          h('span', null, message), h('button', { type: 'button', className: 'ovc-link', 'aria-label': 'Dismiss message', onClick: () => setMessage('') }, '✕')),
         busy && h('div', { className: 'ovc-busy' }, 'Working…'),
       ),
       !prefs && !error && h('p', { className: 'ovc-muted ovc-pad' }, 'Loading your assistant…'),

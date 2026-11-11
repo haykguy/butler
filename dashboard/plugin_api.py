@@ -269,6 +269,10 @@ def _discover_route_from_state_db(state_db: Path) -> dict | None:
                     sk = str(rdict.get('id') or '').strip()
                 if not sk:
                     continue
+                # Never auto-bind proactive wakes to a group/channel/thread or
+                # another platform user's session: only local surfaces or DM keys.
+                if source not in ('desktop', 'tui', 'cli', 'local', 'webapp') and ':dm:' not in f':{sk}:':
+                    continue
                 route_id = 'sk:' + hashlib.sha256(sk.encode('utf-8')).hexdigest()[:16]
                 return {
                     'route_id': route_id,
@@ -874,7 +878,15 @@ def enable_proactive(payload: dict | None = None):
         updated['persistence'] = body['persistence']
     if 'dailyLimit' in body:
         dl = body['dailyLimit']
-        updated['dailyLimit'] = None if dl in (None, '') else int(dl)
+        if dl in (None, ''):
+            updated['dailyLimit'] = None
+        elif isinstance(dl, bool) or not isinstance(dl, (int, str)):
+            raise HTTPException(status_code=422, detail='Daily limit must be 0–1000 or unset')
+        else:
+            try:
+                updated['dailyLimit'] = int(dl)
+            except ValueError:
+                raise HTTPException(status_code=422, detail='Daily limit must be 0–1000 or unset') from None
     if 'quietEnabled' in body and isinstance(body['quietEnabled'], bool):
         updated['quietEnabled'] = body['quietEnabled']
     if 'quietStart' in body and body['quietStart'] is not None:

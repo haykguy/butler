@@ -11,6 +11,16 @@ from pathlib import Path
 import uuid
 
 
+def hermes_home():
+    """Active profile's Hermes home (public hermes_constants helper; env fallback)."""
+    try:
+        from hermes_constants import get_hermes_home
+    except ImportError:
+        import os
+        return Path(os.environ.get('HERMES_HOME', '~/.hermes')).expanduser()
+    return Path(get_hermes_home()).expanduser()
+
+
 def _box(op, image):
     box = op.get('box', (0, 0, image.width, image.height))
     if not isinstance(box, (list, tuple)) or len(box) != 4:
@@ -123,7 +133,7 @@ def edit_image(args):
         operations = args.get('operations')
         if not isinstance(path, str) or not path or not isinstance(operations, list):
             raise ValueError('input_path and operations list are required')
-        cache = (Path(os.environ.get('HERMES_HOME', '~/.hermes')).expanduser() / 'image_cache' / 'edited')
+        cache = (hermes_home() / 'image_cache' / 'edited')
         output = args.get('output_path')
         if output is None:
             name = f'{Path(path).stem}-edited-{uuid.uuid4().hex}.png'

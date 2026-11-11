@@ -12,6 +12,7 @@ from pathlib import Path
 import stat
 import tempfile
 from contextlib import contextmanager
+from .paths import hermes_home
 
 _MAX = 50 * 1024 * 1024
 _TYPES = {'image': {'.png', '.jpg', '.jpeg', '.gif', '.webp'},
@@ -19,7 +20,7 @@ _TYPES = {'image': {'.png', '.jpg', '.jpeg', '.gif', '.webp'},
 
 
 def roots():
-    home = Path(os.environ.get('HERMES_HOME', '~/.hermes')).expanduser().absolute()
+    home = hermes_home().absolute()
     return (home / 'image_cache', home / 'plugin-data' / 'butler' / 'media')
 
 

@@ -22,9 +22,18 @@ def _install_fake_session_context(monkeypatch, *, engaged=True, values=None):
     gw_pkg = types.ModuleType('gateway')
     gw_pkg.__path__ = []
     sc_mod = types.ModuleType('gateway.session_context')
-    sc_mod._UNSET = unset
-    sc_mod.session_context_engaged = lambda: engaged
-    sc_mod._bound_session_value = lambda name: data.get(name, unset)
+    import os as _os
+
+    def _get_session_env(name, default=''):
+        # Mirrors gateway.session_context.get_session_env: a bound ContextVar wins,
+        # else os.environ, else default. Nothing is bound unless engaged.
+        # set_session_vars binds every session var (omitted ones to ''), so with a
+        # bound session nothing falls through to the environment.
+        if engaged and data:
+            return data.get(name, '')
+        return _os.getenv(name, default)
+
+    sc_mod.get_session_env = _get_session_env
     monkeypatch.setitem(sys.modules, 'gateway', gw_pkg)
     monkeypatch.setitem(sys.modules, 'gateway.session_context', sc_mod)
     return unset
@@ -100,6 +109,14 @@ def test_capture_bound_turn_route_never_falls_back_to_env_or_plugin_session(monk
         'origin': None,
         'platform': 'telegram',
     }
+
+    # 6b. Bound value identical to the ambient env value is ambiguous -> fails closed
+    _install_fake_session_context(
+        monkeypatch,
+        engaged=True,
+        values={'HERMES_SESSION_KEY': 'agent:default:telegram:dm:spoofed'},
+    )
+    assert capture_bound_turn_route() is None
 
     # 7. Falls back from empty platform to source, then 'local'
     _install_fake_session_context(

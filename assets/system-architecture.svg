@@ -42,7 +42,7 @@
   <text x="64" y="398" font-family="ui-monospace, SFMono-Regular, monospace" font-size="11.5" fill="#c9a961">• butler_controls</text>
   <text x="64" y="417" font-family="ui-monospace, SFMono-Regular, monospace" font-size="11.5" fill="#c9a961">• butler_create / butler_manage</text>
   <text x="64" y="436" font-family="ui-monospace, SFMono-Regular, monospace" font-size="11.5" fill="#c9a961">• butler_expression</text>
-  <text x="64" y="453" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="11.5" fill="#a89e8a">  (Photon iMessage tapbacks, replies, effects)</text>
+  <text x="64" y="453" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="11.5" fill="#a89e8a">  (Photon iMessage screen &amp; bubble effects)</text>
 
   <rect x="48" y="482" width="280" height="128" rx="10" fill="#1c1a15" stroke="#3a352b"/>
   <text x="64" y="506" font-family="ui-monospace, SFMono-Regular, monospace" font-size="12.5" font-weight="700" fill="#faf6ee">Hermes Desktop Host</text>

@@ -1,12 +1,15 @@
 """Authenticated session/origin route capture and SQLite route registry.
 
-Security invariant: turn route capture ONLY trusts task-bound ContextVars from
-gateway.session_context when session_context_engaged() is True and the turn is
-not a cron session. Never fall back to os.environ or hermes_cli.plugin_session.
+Security invariant: turn route capture ONLY trusts task-bound session values
+read through the public gateway.session_context.get_session_env seam, and only
+when the session key cannot have come from the process environment (the public
+reader falls back to os.environ when no ContextVar is bound). Cron sessions are
+rejected. Never fall back to os.environ or hermes_cli.plugin_session.
 """
 from datetime import datetime, timezone
 import hashlib
 import json
+import os
 from pathlib import Path
 import sqlite3
 
@@ -26,33 +29,35 @@ def _nonempty_id(value) -> str:
 def capture_bound_turn_route() -> dict | None:
     """Capture the task-bound non-cron session route, failing closed without ContextVars."""
     try:
-        from gateway.session_context import _UNSET, _bound_session_value, session_context_engaged
+        from gateway.session_context import get_session_env
     except ImportError:
         return None
 
-    if session_context_engaged() is not True:
+    # get_session_env returns the task-bound ContextVar when one is bound here and
+    # otherwise falls back to os.environ. A value identical to the ambient
+    # environment value is therefore indistinguishable from an unbound/ambient
+    # key, so fail closed on it; a differing value can only be the bound one.
+    try:
+        key = get_session_env('HERMES_SESSION_KEY', '')
+    except Exception:
+        return None
+    if not isinstance(key, str) or not key.strip():
+        return None
+    if key == os.environ.get('HERMES_SESSION_KEY'):
         return None
 
-    key = _bound_session_value('HERMES_SESSION_KEY')
-    if key is _UNSET or not isinstance(key, str) or not key.strip():
-        return None
-
-    if _bound_session_value('HERMES_CRON_SESSION') == '1':
+    # A '1' (bound or ambient) means cron: either way, fail closed.
+    if get_session_env('HERMES_CRON_SESSION', '') == '1':
         return None
 
     def _clean(name: str) -> str:
-        val = _bound_session_value(name)
-        if val is _UNSET or val is None:
+        val = get_session_env(name, '')
+        if val is None:
             return ''
         return val.strip() if isinstance(val, str) else str(val).strip()
 
     platform = _clean('HERMES_SESSION_PLATFORM')
     source = _clean('HERMES_SESSION_SOURCE')
-    chat_id = _clean('HERMES_SESSION_CHAT_ID')
-    chat_type = _clean('HERMES_SESSION_CHAT_TYPE')
-    user_id = _clean('HERMES_SESSION_USER_ID')
-    thread_id = _clean('HERMES_SESSION_THREAD_ID')
-    _ = (chat_id, chat_type, user_id, thread_id)
 
     clean_key = key.strip()
     route_id = _hash_prefix('sk', clean_key)

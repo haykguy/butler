@@ -1,8 +1,8 @@
 """Opt-in expressions through the local Photon sidecar, with strict targeting."""
 import json
-import os
 from pathlib import Path
 import urllib.request
+from .paths import hermes_home
 
 
 class _NoRedirect(urllib.request.HTTPRedirectHandler):
@@ -12,7 +12,7 @@ class _NoRedirect(urllib.request.HTTPRedirectHandler):
 
 def _sidecar(path, body):
     """Call the local Photon sidecar using its runtime discovery record."""
-    home = Path(os.environ.get("HERMES_HOME", "~/.hermes")).expanduser()
+    home = hermes_home()
     record = json.loads((home / "runtime" / "photon-sidecar.json").read_text())
     port, token = record["port"], record["token"]
     if type(port) is not int or not 1 <= port <= 65535 or not isinstance(token, str) or not token:

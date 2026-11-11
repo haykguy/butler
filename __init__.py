@@ -1,4 +1,5 @@
 """Hermes plugin entry point."""
+import logging
 import threading
 
 from .butler.awareness import register_awareness_and_controls
@@ -18,6 +19,14 @@ def register(ctx):
     # Resolve profile-scoped storage lazily inside an admitted gateway turn or
     # authenticated bound local/TUI/desktop turn, never at registration time.
     def start(**kwargs):
+        # Runs inside post_gateway_admission and the pre_llm_call bound-turn path:
+        # never let storage/thread start failures propagate into a user's turn.
+        try:
+            _start()
+        except Exception:
+            logging.getLogger(__name__).warning('Butler runner start failed', exc_info=True)
+
+    def _start():
         with lock:
             if state.get('closed'):
                 return

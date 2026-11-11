@@ -178,6 +178,12 @@ def shift_out_of_quiet_hours(
     )
     end_utc = end_local.astimezone(timezone.utc)
     if end_utc <= cand:
+        # Repeated wall time after a DST fall-back: the second occurrence of the
+        # end time is still ahead; do not skip a whole day.
+        later = end_local.replace(fold=1).astimezone(timezone.utc)
+        if later > cand:
+            return later
+    if end_utc <= cand:
         next_day = target_date + timedelta(days=1)
         end_utc = datetime(
             next_day.year, next_day.month, next_day.day,
