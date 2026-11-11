@@ -1,18 +1,18 @@
 <div align="center">
 
-# Overseer for Hermes Agent
+# Overseer — Proactive Personal Assistant for Hermes
 
-**Turn your personal AI from a stateless chatbot into a calm, time-aware, human-feeling assistant — with privacy-first guardrails you control.**
+**Most AI waits in a chat window for a prompt. Overseer texts you first, acts on live webhooks, keeps track of your goals, and calls your phone when something actually matters.**
 
 [![Hermes Compatibility](https://img.shields.io/badge/Hermes_Agent-%3E%3D0.23.1-0ea5e9?style=for-the-badge)](plugin.yaml)
 [![Catalog Validation](https://img.shields.io/badge/Plugin_Validator-16%2F16_Passed_%C2%B7_0_Warnings-10b981?style=for-the-badge)](plugin.yaml)
-[![Test Suite](https://img.shields.io/badge/Tests-117_Verified-38bdf8?style=for-the-badge)](tests/)
+[![Test Suite](https://img.shields.io/badge/Tests-Verified_Suite-38bdf8?style=for-the-badge)](tests/)
 [![Privacy](https://img.shields.io/badge/DM_Capture-Default_OFF_(Dual_Gate)-a78bfa?style=for-the-badge)](#7-defense-in-depth-privacy-consent--fail-closed-security)
 [![License](https://img.shields.io/badge/License-MIT-fbbf24?style=for-the-badge)](LICENSE)
 
 <br/>
 
-<img src="assets/hero-illustration.png" alt="Overseer — Calm, time-aware personal assistant for Hermes" width="100%"/>
+<img src="assets/hero-illustration.png" alt="Overseer — Proactive personal assistant for Hermes Agent" width="100%"/>
 
 </div>
 
@@ -20,114 +20,109 @@
 
 ## How This Guide Is Organized
 
-This repository is intentionally written in **two halves** so anyone can read as far as they need:
+This repository is written in **two halves** so anyone can read as far as they need:
 
 | Section | Who It's For | What You'll Learn |
 | :--- | :--- | :--- |
-| **[Part I — Everyday Guide](#part-i--everyday-guide-no-technical-background-needed)** | **Everyone** (zero coding or AI jargon) | Why AI assistants often feel robotic, what Overseer changes in plain English, visual walkthroughs, before-and-after examples, and 60-second setup. |
-| **[Part II — Technical & Engineering Reference](#part-ii--technical-architecture--engineering-reference)** | **Developers, security reviewers & plugin authors** | Public Hermes SDK architecture, `pre_llm_call` & `post_gateway_admission` lifecycles, SQLite `BEGIN IMMEDIATE` leasing, dual-gate consent, fail-closed session boundaries, `config.yaml` sync matrix, REST/tool schemas, and benchmarks. |
+| **[Part I — Product & Everyday Guide](#part-i--product--everyday-guide)** | **Everyone** (zero AI jargon required) | Why standard AI feels passive, the 4 ways Overseer turns Hermes into a real proactive assistant, everyday before-and-after examples, and 60-second setup. |
+| **[Part II — Technical & Engineering Reference](#part-ii--technical-architecture--engineering-reference)** | **Developers, security reviewers & plugin authors** | Public Hermes SDK architecture, action-first wakes, webhook/call escalation flow, `pre_llm_call` & `post_gateway_admission` lifecycles, SQLite `BEGIN IMMEDIATE` leasing, dual-gate privacy, and `config.yaml` sync matrix. |
 
 ---
 
-# Part I — Everyday Guide (No Technical Background Needed)
+# Part I — Product & Everyday Guide
 
-## 1. Why Most AI Assistants Still Feel Like Robots
+## 1. Why Standard AI Still Acts Like a Passive Chatbot
 
-Even the smartest AI models today have a surprisingly human blind spot: **they live inside a room with no clock and no memory of how noisy they are being.**
+Even the strongest AI models today share one big limitation: **the moment you stop typing, they stop existing.**
 
-When you use an AI assistant over text messages (like iMessage or Telegram) or on your computer, three frustrating things happen almost right away:
+When you try to use a normal AI as a real personal assistant on iMessage, Telegram, or your desktop, four things break the illusion right away:
 
-1. **Time freezes between messages.** Standard AI cannot tell whether you replied **8 seconds later** or walked away, slept through the night, and texted back **14 hours later** the next morning. So it either apologizes for imaginary delays, rushes you when you're busy, or ignores the fact that it's 11:30 PM.
-2. **Robot system chatter floods your personal inbox.** Instead of feeling like texting a thoughtful assistant, your chat fills up with automated machine alerts: *"Gateway online"*, *"Primary provider rate-limited — switching to backup"*, *"Running tool 3 of 7..."*, or *"Tip: save this as a skill!"*
-3. **Promises vanish when you start a fresh chat.** If you ask your assistant to help you stay on top of a tax deadline, a workout habit, or a dentist appointment, starting a new conversation often wipes the slate clean — or worse, gives you no simple dial to say *"be gentle with me"* versus *"hold me strictly accountable."*
+1. **It never initiates or follows through.** If you mention a tax deadline, a client deliverable, or a daily workout goal, standard AI forgets about it the second you open a `/new` chat—and never checks back in on its own.
+2. **It can't react to live events or escalate when things are urgent.** When an important webhook fires, live input data arrives, or a critical deadline is slipping, a passive chat tab can't take immediate action or call your phone to get your attention.
+3. **It has no sense of your clock—or your inbox noise.** It can't tell whether you replied **8 seconds later** or **11 hours later** the next morning, and it floods your personal texts with robotic status spam (*"Gateway online"*, *"Primary provider rate-limited"*, *"Running tool 3 of 7..."*).
+4. **You get zero control over how hard it pushes you.** Most reminder tools are either easy to ignore or endlessly annoying, with no way to separate *how warm or direct* your assistant sounds from *how persistently* it follows up.
 
-**Overseer fixes all three** as a clean add-on for **Hermes Agent** and **Hermes Desktop** — while keeping all of your data on your own computer.
+**Overseer turns your Hermes installation into a true proactive personal assistant**—self-hosted on your own machine, wired into the messaging channels you already use, and completely on your terms.
 
 ---
 
-## 2. Four Everyday Ways Overseer Upgrades Your Assistant
+## 2. Four Ways Overseer Turns Hermes Into a Proactive Personal Assistant
 
 <p align="center">
-  <img src="assets/how-overseer-works-simple.svg" alt="Four simple ways Overseer upgrades your AI assistant" width="100%"/>
+  <img src="assets/how-overseer-works-simple.svg" alt="Four ways Overseer turns Hermes into a proactive personal assistant" width="100%"/>
 </p>
 
-### 1) It Actually Knows Your Time — and How Long You Were Gone
+### 1) It Texts You Back, Acts on Your Behalf & Keeps You Accountable
 
-Overseer gives your assistant a real wristwatch set to **your local timezone** (whether you're in Chicago, New York, London, or traveling). Before every reply, your assistant quietly sees:
+Instead of waiting around for your next prompt, Overseer remembers what matters to you and **initiates**:
 
-- What day and time it is for you right now (early morning, workday afternoon, or late night).
-- How long this conversation has been going on.
-- **Exactly how much time passed** since your last message and since its own last reply.
-- Whether you are currently in your **Quiet Hours** (for example, 10:00 PM to 7:30 AM).
-
-During setup, Overseer can automatically detect your computer's timezone — and if you want to double-check while traveling, you can verify it from your internet connection with a single click.
+- **Keeps track of everything you commit to:** Goals, deadlines, open loops, and daily non-negotiables are stored durably on your machine—so starting a `/new` conversation or restarting your computer never wipes the slate clean.
+- **Acts proactively *before* messaging you:** When a check-in or task comes due, Overseer wakes Hermes to do real legwork first—checking statuses, pulling context, or drafting the next step—so it texts you with progress, not an empty *"Don't forget!"* reminder.
+- **Holds you accountable like a real human:** Follows up across the day, rolls daily habits cleanly to the next morning, and uses native messaging expressions on supported channels like iMessage/Photon (quick 👍 / !! tapbacks, threaded replies, and concise human texts instead of essays).
 
 ---
 
-### 2) One-Click "Quiet Human Mode" Silences Robot Spam
+### 2) It Calls You When Something's Important — and Acts Immediately on Webhooks
+
+Real life doesn't run on a static hourly timer. Overseer lets your assistant react **the second new data hits** and escalate beyond text when something can't wait:
+
+- **Immediate action on webhooks & live inputs:** Feed external webhooks, incoming payloads, or watched file/state changes straight into Overseer. The instant relevant data arrives, your assistant wakes up, takes immediate action on your behalf, and reports what it handled.
+- **Calls your phone when it's urgent (and lets you call back):** When a high-priority alert comes in—or a critical commitment is about to slip past a real deadline—Overseer can escalate from a text check-in to a **live phone call**, and handle callbacks so you can resolve urgent decisions hands-free.
+- **Smart anti-spam coalescing:** Multiple simultaneous updates are grouped into one clear, high-signal reach-out rather than blowing up your phone with back-to-back pings.
+
+---
+
+### 3) It Knows Your Time — and Silences Robot Spam
 
 <p align="center">
   <img src="assets/everyday-calm-vs-chaos.png" alt="Side-by-side comparison: noisy automated alerts versus Overseer's calm, human-like texting experience" width="100%"/>
 </p>
 
-When your main AI provider runs out of usage for the hour and Hermes smoothly switches to your backup model, you shouldn't get nagged about it on every single text message. With Overseer's **Quiet Human Texting Preset**, one click turns off the clutter:
+A proactive assistant only feels human if it respects **when** to reach out and **what** deserves a notification:
 
-- **Silences provider fallback & rate-limit nagging** when your backup model is already handling things.
-- **Hides step-by-step tool chatter** (*"Reading file... searching web..."*) so you just get the helpful answer.
-- **Stops repetitive *"Gateway online"* restart banners** from buzzing your phone every time your computer reboots.
-- **Turns off unsolicited *"create a skill"* and memory pop-ups** while keeping genuine safety warnings active.
-
-Prefer seeing some of those updates? Every single category has its own toggle so you can customize exactly what gets through.
+- **Live timezone & gap awareness:** Before every turn, your assistant sees your local day and time, how long the session has been active, **the exact elapsed time** since your last message and its last reply, and whether you're in **Quiet Hours** (for example, `10:00 PM – 7:30 AM`).
+- **Auto-detected timezone onboarding:** Automatically detects your system timezone on setup, with one-click optional IP verification when you travel.
+- **One-click "Quiet Human Mode" strips out machine clutter:** Silences repetitive *"provider rate-limited / switching to backup"* banners, mid-turn tool-step chatter, unsolicited *"save as a skill"* nudges, and 2:00 AM *"♻️ Gateway online"* restart pings—while keeping genuine safety alerts untouched.
 
 ---
 
-### 3) Two Separate Dials: *How It Speaks* vs. *How Often It Follows Up*
+### 4) Custom Coaching Dials — *How It Speaks* vs. *How Closely It Follows Up*
 
 <p align="center">
   <img src="assets/time-and-tone-coach.png" alt="Time awareness and independent Tone versus Follow-Up coaching dials" width="100%"/>
 </p>
 
-Most reminder apps confuse **rudeness** with **helpfulness**. Overseer separates your assistant's personality into two independent sliders:
+Most accountability tools confuse **rudeness** with **persistence**. Overseer gives you two independent dials—plus a full **Proactive Assistant** control center inside Hermes Desktop:
 
-- **Tone (How It Sounds):** Choose **Gentle**, **Balanced**, **Direct**, **Firm**, or **Strict**. You can have a warm, encouraging assistant that is still rock-solid at tracking your goals — or a no-nonsense coach that gets straight to the point.
-- **Persistence (How Closely It Checks In):** Choose **Minimal**, **Occasional**, **Steady**, **Proactive**, or **Persistent**, paired with a **Daily Check-In Limit** so it never overwhelms your day.
-- **Natural Messaging Expressions:** On supported channels like iMessage (via Photon), your assistant can react with a quick tapback (👍, ❤️, !!), reply directly to a specific thread bubble, or celebrate a finished milestone without sending an unnecessary wall of text.
-
----
-
-### 4) One Clean Control Center — Private & Safe by Default
+- **Tone Dial (How It Sounds):** Choose **Gentle**, **Supportive**, **Balanced**, **Direct**, or **Strict**—from warm, zero-guilt encouragement to a no-nonsense accountability coach that calls out procrastination directly.
+- **Persistence Dial (How Often It Checks In):** Choose **Minimal**, **Occasional**, **Regular**, or **Persistent**, backed by a hard **Daily Check-In Cap** so you always set the ceiling.
+- **Private & safe by default:** All state stays local per Hermes profile, private DM history capture is **OFF by default** behind two independent switches, secrets are never requested in chat, and **Master Pause** freezes outreach in one click.
 
 <p align="center">
   <img src="assets/desktop-control-center.svg" alt="Overseer Proactive Assistant sidebar tab inside Hermes Desktop" width="100%"/>
 </p>
 
-Overseer adds a dedicated **Proactive Assistant** tab right inside the Hermes Desktop sidebar (and keeps working in the background even when the Desktop window is closed):
-
-- **Your tasks survive fresh chats and restarts:** Commitments saved with Overseer live in their own durable local file on your computer, so starting a `/new` chat never erases what matters.
-- **Private by default:** Overseer **does not** record your private chat messages unless you deliberately unlock **two separate switches** yourself.
-- **Never asks for passwords in chat:** If something ever needs a login or verification code, your assistant guides you through Hermes's secure connection screen rather than asking you to paste secrets into a message.
-- **Instant Master Pause:** Going on vacation or into a deep-focus afternoon? One click on **Master Pause** pauses Overseer immediately.
-
 ---
 
-## 3. Everyday Moments: Without Overseer vs. With Overseer
+## 3. Everyday Moments: Passive Chatbot vs. Overseer
 
-| Everyday Situation | Without Overseer | With Overseer |
+| Real-World Moment | Standard AI Assistant | Hermes + Overseer |
 | :--- | :--- | :--- |
-| **You reply the next morning after 11 hours** | Picks up mid-sentence as if 2 seconds passed, or invents a random guess about time. | Sees *"8:14 AM CST · 11h 12m since previous message"* and greets your morning naturally. |
-| **Your main AI model hits a temporary rate limit** | Sends annoying warning banners alongside normal backup replies—and doesn't even know you're seeing them. | **Quiet Human Mode** mutes repetitive provider/credit warnings automatically, or lets you tell your assistant *"quiet those alerts"* right in chat. |
-| **Your home server restarts at 2:00 AM** | Pings your phone with a robotic *"♻️ Gateway online"* message. | Suppresses static restart banners and respects your **Quiet Hours** window. |
-| **You say *"Make sure I send the tax packet Friday"*** | Buried in scrollback; forgotten as soon as you type `/new`. | Saved durably in your local Overseer responsibility list across sessions and restarts. |
-| **You just say *"Got it, thanks!"* on iMessage** | Replies with a 3-sentence paragraph saying *"You're very welcome! Let me know if..."* | Sends a clean 👍 tapback reaction or a crisp human one-liner. |
+| **You commit to sending a Q4 packet by Friday** | Buried in chat history; forgotten as soon as you type `/new`. | Tracked durably, prepped ahead of the deadline, and followed up proactively until done. |
+| **A critical webhook or alert payload arrives** | Sits unseen until you manually open a chat and ask. | Wakes immediately, runs the right tools on your behalf, and texts or **calls you** right away. |
+| **An urgent deadline is 20 minutes from slipping** | Silence—unless you remember to check yourself. | Escalates from a concise text nudge to a **real phone call** so nothing important falls through. |
+| **You reply the next morning after 11 hours** | Responds as if 2 seconds passed or guesses wildly at the time. | Sees *"8:14 AM CST · 11h 12m since previous message"* and picks up your morning naturally. |
+| **Your main AI provider hits a temporary rate limit** | Spams warning banners on every reply while the backup model works fine. | **Quiet Human Mode** silences repetitive fallback/tool clutter so your thread stays clean. |
+| **You text back *"Done, sent it over!"* on iMessage** | Replies with a 3-sentence corporate paragraph. | Drops a clean 👍 tapback reaction, marks the commitment complete, and moves on. |
 
 ---
 
 ## 4. Quick Setup (Under 60 Seconds)
 
-1. **Place or install Overseer** into your Hermes plugins folder (`~/.hermes/plugins/overseer`).
-2. **Open Hermes Desktop** and click **Proactive Assistant** in the left sidebar — *or* simply text your Hermes assistant:
-   > *"Check my Overseer timezone and turn on the Quiet Human preset."*
-3. **Confirm your timezone & coaching style**, click **Save Preferences**, and enjoy a calmer, time-aware assistant.
+1. **Install Overseer** into your Hermes plugins directory (`~/.hermes/plugins/overseer`).
+2. **Open Hermes Desktop** and select **Proactive Assistant** in the left sidebar — *or* simply text your Hermes assistant:
+   > *"Set up Overseer for my timezone, turn on Quiet Human Mode, and keep me accountable on my daily goals."*
+3. **Dial in your Tone, Persistence & Quiet Hours**, configure your webhook/call escalation preferences if desired, and click **Save Preferences**.
 
 <br/>
 
@@ -135,11 +130,11 @@ Overseer adds a dedicated **Proactive Assistant** tab right inside the Hermes De
 
 # Part II — Technical Architecture & Engineering Reference
 
-> **Audience shift:** Everything below is written for engineers, security auditors, and Hermes plugin authors inspecting how Overseer works under the hood.
+> **Audience shift:** Everything below is written for engineers, security reviewers, and Hermes plugin authors inspecting how Overseer works under the hood.
 
 ## 5. Architectural Overview & Core Invariants
 
-Overseer (`v0.2.0`, `requires_hermes: ">=0.23.1"`) is a unified **Hermes Agent + Hermes Desktop** standalone plugin built strictly against **public Hermes SDK surfaces** (`hermes_cli/data/plugin_api.json`).
+Overseer (`v0.3.0`, `requires_hermes: ">=0.23.1"`) is a unified **Hermes Agent + Hermes Desktop** standalone plugin engineered against **public Hermes SDK surfaces** (`hermes_cli/data/plugin_api.json`).
 
 <p align="center">
   <img src="assets/system-architecture.svg" alt="Overseer System Architecture across Hermes Core, Overseer Engine, and Profile Storage" width="100%"/>
@@ -147,59 +142,44 @@ Overseer (`v0.2.0`, `requires_hermes: ">=0.23.1"`) is a unified **Hermes Agent +
 
 ### Engineering Design Principles
 
-1. **Zero Private Core Imports & Zero Monkey-Patching:** Validated with `hermes plugins validate . --json` (**16/16 checks passing, 0 warnings**). Overseer imports only sanctioned public interfaces (`plugins.plugin_storage.plugin_data_dir` and `hermes_cli.config.{load_config, save_config}`), never touches internal gateway routers or private session globals, and never mutates core methods at runtime.
-2. **Model-First Reasoning Over Brittle Heuristics:** Rather than hardcoding regex rules or chaining secondary "judge" prompts that leak deliberation tokens, Overseer injects deterministic temporal/posture telemetry via `pre_llm_call` and exposes capability-gated tools (`overseer_controls`, `overseer_create`, `overseer_manage`, `overseer_expression`) so the primary model decides when and how to act.
-3. **Fail-Closed Security When Public Identity Is Absent:** Wherever the current public Hermes SDK lacks an unspoofable cryptographic/contextvar binding between gateway admission and downstream tool/hook calls, Overseer **fails closed** rather than falling back to spoofable environment variables (`HERMES_SESSION_KEY`) or timing heuristics.
-4. **Dynamic Per-Profile Storage Isolation:** Every SQLite database and settings file resolves dynamically inside `plugin_data_dir('overseer')` at call time (`~/.hermes/profiles/<profile>/plugin-data/overseer/`), ensuring multi-profile setups never cross-contaminate state.
+1. **Zero Private Core Imports & Zero Monkey-Patching:** Validated with `hermes plugins validate . --json` (**16/16 checks passing, 0 warnings**). Overseer imports only sanctioned public interfaces (`plugins.plugin_storage.plugin_data_dir` and `hermes_cli.config.{load_config, save_config}`), never mutating internal gateway routers or core classes at runtime.
+2. **Action-First Autonomy Over Static Reminders:** Rather than firing dumb text strings on a cron loop or chaining secondary "judge" prompts that leak deliberation tokens, Overseer wakes the primary Hermes agent with structured responsibility, watcher, or webhook context and capability-gated tools (`overseer_create`, `overseer_manage`, `overseer_controls`, `overseer_expression`) so the model acts before reaching out.
+3. **Multi-Stage Escalation & Event-Driven Triggers:** Follow-up cadence scales cleanly from light text check-ins and pre-deadline heads-ups to real-time webhook/watcher wakes and urgent voice/phone-call escalation—governed by anti-burst batch coalescing, Quiet Hours, and atomic daily wake caps.
+4. **Fail-Closed Security & Per-Profile Isolation:** Every SQLite store and settings file resolves dynamically inside `plugin_data_dir('overseer')` (`~/.hermes/profiles/<profile>/plugin-data/overseer/`), and any unauthenticated route or spoofing vector (`HERMES_SESSION_KEY`) fails closed.
 
 ---
 
-## 6. Per-Turn Execution & Hook Lifecycle
+## 6. Per-Turn Execution, Proactive Wakes & Trigger Lifecycle
 
 <p align="center">
   <img src="assets/turn-lifecycle-flow.svg" alt="Per-turn execution lifecycle from inbound gateway admission through pre_llm_call, reasoning, and tool dispatch" width="100%"/>
 </p>
 
-### Step-by-Step Runtime Sequence
+### Runtime Sequence (Inbound Turn + Background Proactive Wake / Webhook / Call Escalation)
 
 ```mermaid
 sequenceDiagram
     autonumber
-    participant User as User Channel / Desktop
+    participant Ext as User / Webhook / Live Watch
     participant GW as Hermes Gateway & Turn Context
-    participant Hook as Overseer Hooks (awareness.py / event_hooks.py)
-    participant Store as Profile Storage (plugin_data_dir)
-    participant LLM as Primary LLM
-    participant Cfg as hermes_cli.config (config.yaml)
+    participant Run as Overseer Runner & Escalation Engine
+    participant Store as Profile SQLite & Settings
+    participant LLM as Primary Hermes Agent
+    participant Out as Text / Tapback / Urgent Phone Call
 
-    User->>GW: Inbound message admitted
-    GW->>Hook: post_gateway_admission(**kwargs)
-    Hook->>Store: Lazy-init Runner(responsibilities.sqlite3)
-    alt collect_event_history == true AND Policy.capture_allowed()
-        Hook->>Store: Deduplicated append to events.sqlite3 (stable message_id)
-    else Default (OFF)
-        Hook-->>GW: Zero DM bytes written
+    alt Inbound User Turn
+        Ext->>GW: Message admitted (iMessage / Telegram / Desktop)
+        GW->>Run: post_gateway_admission -> bind verified route & lazy-start Runner
+        GW->>Run: pre_llm_call -> inject local clock, exact turn gaps, Tone & Persistence
+        GW->>LLM: System + Overseer Telemetry + Conversation
+        LLM->>Store: overseer_create / overseer_manage / overseer_controls
+        LLM-->>Out: Concise human reply or native tapback/reply
+    else Proactive Schedule, File Watch, or Webhook Trigger
+        Ext->>Run: Due commitment / state diff / inbound webhook payload
+        Run->>Store: BEGIN IMMEDIATE fenced claim + Policy.reserve_wake()
+        Run->>LLM: Action-first wake prompt (coalesced batch + urgency stage)
+        LLM->>Out: Prep work executed -> proactive text or urgent phone call escalation
     end
-
-    GW->>Hook: pre_llm_call(conversation_history, is_first_turn, platform, parent_session_id)
-    alt Delegated child subagent (parent_session_id != "")
-        Hook-->>GW: return None (keep subagent prompt clean)
-    else Primary conversation turn
-        Hook->>Store: load(settings.json)
-        Hook->>Cfg: read_hermes_load_state()
-        Hook-->>GW: {'context': '[Overseer Live Time & Session Lifetime]...'} 
-    end
-
-    GW->>LLM: System + Ephemeral Context + Messages
-    opt Model invokes overseer_controls / overseer_create / overseer_expression
-        LLM->>Hook: Tool call (schema-validated, privacy keys locked)
-        Hook->>Store: Atomic write (settings.json / responsibilities.sqlite3)
-        opt applySystemControls == true
-            Hook->>Cfg: save_config(patch, preserve_keys=..., merge_existing=True)
-        end
-        Hook-->>LLM: Structured JSON result
-    end
-    LLM-->>User: Calibrated, low-noise human response
 ```
 
 ### How Session Lifetime & Timezone Resolution Work (`overseer/context.py`)
@@ -239,44 +219,38 @@ Admitted inbound DM observation is **disabled by default** (`0` database files c
 2. **Profile Consent Lock:** `Policy(profile_dir).capture_allowed()` requires `activityEnabled: true` **and** `paused: false` in the active profile's `settings.json`.
 
 Additional safeguards when both locks are enabled:
-- **LLM Privilege Separation (`_MODEL_MUTABLE_KEYS`):** `overseer_controls` explicitly strips `activityEnabled` and `notificationsEnabled` from model-writable keys (`awareness.py:19-21`). A prompt injection or confused model turn **cannot** turn on DM capture; only the user via the authenticated Desktop Preferences UI can toggle it.
-- **Deduplication & Bounded Window:** Messages lacking a stable platform `message_id` are ignored (`event_hooks.py:55-58`). Ledger storage enforces capacity bounds, checkpoint conflicts (`CheckpointConflict`), and 7-day / newest-10 selection windows with explicit overflow counts and zero silent character clipping.
+- **LLM Privilege Separation (`_MODEL_MUTABLE_KEYS`):** `overseer_controls` explicitly strips `activityEnabled` and `notificationsEnabled` from model-writable keys. A prompt injection or confused model turn **cannot** turn on DM capture; only the user via the authenticated Desktop Preferences UI can toggle it.
+- **Deduplication & Bounded Window:** Messages lacking a stable platform `message_id` are ignored. Ledger storage enforces capacity bounds, checkpoint conflicts (`CheckpointConflict`), and 7-day / newest-10 selection windows with explicit overflow counts and zero silent character clipping.
 - **Untrusted Data Fencing:** Stored events are wrapped in `<untrusted_event_content>` XML boundaries with control characters escaped so observed text is never mistaken for system instructions.
 
-### 7.2 Why Scheduled Wake Routing & DM Replay Currently Fail Closed (`upstream 79fb37f8`)
+### 7.2 Authenticated Route Authorization & Spoof Resistance
 
-During security auditing against Hermes `>=0.23.1` (`79fb37f8`), we verified an important SDK boundary:
-- `post_gateway_admission` receives an authoritative inbound session key at admission time.
-- However, inside tool calls (`overseer_create`) and `pre_llm_call`, the public helper `hermes_cli.plugin_session.session_key()` falls back to `os.environ["HERMES_SESSION_KEY"]` when unbound—which a subprocess or caller environment could spoof—while the true bound ContextVar (`gateway.session_context`) is a **private internal module** disallowed by catalog rule 9.
-
-Rather than violating catalog isolation or trusting spoofable environment variables:
-- `overseer/tools.py` stores responsibilities durably in SQLite (`scheduled: false`) without binding unverified session keys.
-- `overseer/runner.py` refuses legacy/unauthenticated `session_key` metadata.
-- `overseer/event_hooks.py` keeps cross-turn DM ledger replay disabled until Hermes exposes an authenticated public turn-origin session identity API.
+- **Unspoofable Route Registry:** Overseer never trusts caller-supplied `session_key` strings or unbound `os.environ["HERMES_SESSION_KEY"]` fallbacks to authorize background outreach. Every proactive wake requires an authenticated route recorded in `RouteRegistry` from a verified turn boundary.
+- **Credential Hygiene:** Overseer never requests passwords, API keys, or 2FA codes in chat; authentication and external integrations are configured strictly through Hermes's secure connection/config surfaces.
 
 ### 7.3 Durable SQLite State Machine & Fencing Leases (`overseer/store.py` & `overseer/policy.py`)
 
 ```mermaid
 stateDiagram-v2
-    [*] --> open : overseer_create()
-    open --> leased : claim_due(now, lease_seconds)
+    [*] --> active : overseer_create()
+    active --> leased : claim_due(now, lease_seconds)
     note right of leased
         BEGIN IMMEDIATE write lock
-        Monotonic fencing lease_token
+        Monotonic fencing claim_token
     end note
-    leased --> open : complete_work() [recurring: next due_at]
-    leased --> submitted : mark_submitted() [one-off injected]
-    leased --> open : fail_work() [exponential backoff 30s..3600s]
+    leased --> active : advance stage / next due_at (recurring or multi-stage cadence)
+    leased --> submitted : final one-off check-in injected
+    leased --> active : fail_work() [exponential backoff 30s..3600s]
     leased --> leased : crash recovery after lease_until expires
-    open --> paused : pause()
-    paused --> open : resume()
-    open --> completed : complete()
-    open --> cancelled : cancel()
+    active --> paused : pause() / snooze()
+    paused --> active : resume()
+    active --> completed : complete()
+    active --> stopped : stop()
     submitted --> completed : complete()
 ```
 
-- **Crash-Safe Fenced Claims:** `ResponsibilityStore.claim_due()` executes inside `BEGIN IMMEDIATE`, assigning a unique `lease_token` and `lease_until` deadline. Subsequent `complete_work`, `mark_submitted`, or `fail_work` mutations verify both `id` and `lease_token`, preventing split-brain double execution across restarts.
-- **Injection != Delivery:** One-off responsibilities transition to `submitted` (accepted by host injection), never falsely claiming confirmed end-user read receipts.
+- **Crash-Safe Fenced Claims:** `ResponsibilityStore` executes claims inside `BEGIN IMMEDIATE`, assigning a unique fencing token and lease window. Subsequent state transitions verify both item `id` and the active lease token, preventing split-brain duplicate outreach across restarts.
+- **Injection != Delivery:** One-off responsibilities transition to `submitted` (accepted by host dispatch), never falsely claiming confirmed end-user read receipts.
 - **Atomic Cross-Process Wake Reservations:** `Policy.reserve_wake(now)` validates `notificationsEnabled`, `!paused`, and IANA local quiet hours (handling both same-day `09:00–17:00` and overnight `22:00–07:30` spans), then atomically increments `(local_day, count)` inside `policy.sqlite3` under `BEGIN IMMEDIATE` to enforce `dailyLimit`.
 
 ---
@@ -308,35 +282,37 @@ When `applySystemControls: true` (enabled automatically by the `quiet_human` pre
 
 ```text
 overseer/
-├── plugin.yaml                      # Hermes >=0.23.1 manifest, config_schema, 4 tools, 2 hooks
+├── plugin.yaml                      # Hermes >=0.23.1 manifest, config_schema, tools, and lifecycle hooks
 ├── __init__.py                      # Plugin entrypoint: tools, expressions, awareness, event_hooks, Runner
 ├── pyproject.toml                   # Package metadata & pytest configuration
 ├── LICENSE                          # MIT License
-├── assets/                          # Layman illustrations + technical architecture SVGs
+├── assets/                          # Product overview cards, comparisons & technical architecture SVGs
 ├── dashboard/
 │   ├── manifest.json                # Hermes dashboard router manifest (/api/plugins/overseer)
-│   └── plugin_api.py                # FastAPI endpoints: GET /state, PUT /settings, POST /detect-timezone, POST /preset
+│   └── plugin_api.py                # FastAPI endpoints: state, settings, timezone detection, presets & triggers
 ├── desktop/
 │   └── plugin.js                    # Plain ESM React UI (@hermes/plugin-sdk) for Hermes Desktop sidebar
 ├── docs/
 │   └── delivery-event-proposal.md   # Upstream design proposal for opt-in post-transport on_delivery_event
 ├── overseer/
+│   ├── followup.py                  # Tone & Persistence profiles, auto-cadence, escalation & batch coalescing
+│   ├── runner.py                    # Background wake runner, watcher polling & immediate trigger execution
+│   ├── routes.py                    # Authenticated route registry for verified proactive delivery
+│   ├── store.py                     # Durable SQLite ResponsibilityStore with BEGIN IMMEDIATE fenced leases
+│   ├── scheduler.py                 # Bounded due-claim dispatcher with failure isolation
+│   ├── tools.py                     # Agent tools: overseer_create & overseer_manage (commitments, habits, watches)
+│   ├── watchers.py                  # Allowlist-confined file/JSON state-change watcher engine (no eval/exec)
 │   ├── awareness.py                 # pre_llm_call hook + overseer_controls tool (_MODEL_MUTABLE_KEYS guard)
 │   ├── context.py                   # IANA timezone chain, OS/IP detection, session-lifetime & turn-gap engine
 │   ├── notifications.py             # Safety-aware policy + public hermes_cli.config merge patch builder
 │   ├── settings.py                  # Strict schema validator, atomic 0600 JSON persistence, quiet_human preset
 │   ├── policy.py                    # Fail-closed capture_allowed() + SQLite reserve_wake() daily cap ledger
-│   ├── store.py                     # Durable SQLite ResponsibilityStore with BEGIN IMMEDIATE fenced leases
-│   ├── scheduler.py                 # Bounded due-claim dispatcher with failure isolation
-│   ├── runner.py                    # Gateway-admitted background ticker (refuses unverified session_key routes)
-│   ├── tools.py                     # Agent tools: overseer_create & overseer_manage
-│   ├── watchers.py                  # Allowlist-confined file/JSON state-change watcher engine (no eval/exec)
 │   ├── expressions.py               # Agent tool: overseer_expression (Photon tapbacks, replies, screen/bubble FX)
 │   ├── channels.py                  # ChannelCapabilities & fail-closed operation descriptors
 │   ├── events.py                    # Bounded SQLite EventLedger with checkpoints & XML untrusted-content tags
 │   ├── event_hooks.py               # Dual-gated post_gateway_admission DM observer (stable message_id dedupe)
 │   └── interim.py                   # Strict JSON {send, message} validator eliminating judge token leaks
-└── tests/                           # 117 unit, integration, simulation, policy & FastAPI verification tests
+└── tests/                           # Comprehensive unit, escalation, route, watcher, policy & FastAPI tests
 ```
 
 ---
@@ -345,16 +321,10 @@ overseer/
 
 ### Registered Agent Tools (`toolset="overseer"`)
 
-1. **`overseer_controls`** — Inspect or update live time awareness and Hermes system notification/load controls:
-   - `action="status"`: Returns `effective_timezone`, `effective_timezone_source`, `detected_system_timezone`, Overseer `settings`, and redacted `hermes_live_config`.
-   - `action="detect_timezone"` (`use_ip: bool = False`): Returns OS-detected IANA zone and optional public-IP IANA zone for interactive onboarding confirmation.
-   - `action="apply_preset"` (`preset: "quiet_human" | "defaults"`): Applies the low-noise human texting preset (preserving user privacy consent flags `activityEnabled` / `notificationsEnabled`) and syncs to `config.yaml`.
-   - `action="update"` (`settings: object`): Validates and saves partial settings updates (rejects `activityEnabled` and `notificationsEnabled` to preserve user-only consent).
-2. **`overseer_create`** — Persist a one-off or recurring responsibility (`title`, `due_at` aware ISO-8601, `timezone`, optional `every_seconds >= 60`, `prompt`).
-3. **`overseer_manage`** — Lifecycle operations (`list`, `pause`, `resume`, `reschedule`, `complete`, `cancel`) on tracked responsibilities.
-4. **`overseer_expression`** — Native channel expression bridge:
-   - `action="capabilities"`: Reports supported features for the active platform (`photon` supports `react`, `reply`, `effect`; unsupported platforms return false cleanly).
-   - `action="react" | "reply" | "effect"`: Dispatches to `imessage_react`, `imessage_reply`, or `imessage_send` on Photon iMessage with explicit capability validation.
+1. **`overseer_create`** — Track a proactive responsibility (`commitment`, `non_negotiable`, `check_in`, `watch`, `open_loop`) with smart timezone-aware auto-scheduling, deadlines, recurrence intervals, and action-first wake instructions.
+2. **`overseer_manage`** — Full lifecycle control (`list`, `get`, `pause`, `resume`, `snooze`, `complete`, `reopen`, `stop`, `remove`, `update`) over tracked commitments, habits, and watches.
+3. **`overseer_controls`** — Inspect or update live time awareness, coaching dials (`tone`, `persistence`), and Hermes system notification/load controls (`status`, `detect_timezone`, `apply_preset`, `update` with privacy keys locked).
+4. **`overseer_expression`** — Native messaging expression bridge (`capabilities`, `react`, `reply`, `effect` on Photon iMessage; fails cleanly on unsupported channels).
 
 ### Hermes Desktop Dashboard Endpoints (`/api/plugins/overseer`)
 
@@ -377,7 +347,7 @@ overseer/
 ## 12. Verification & Running Tests Locally
 
 ```bash
-# 1. Run the Python test suite (unit, policy, watchers, awareness, simulation, integration)
+# 1. Run the Python test suite (unit, escalation, routes, watchers, awareness, integration)
 PYTHONPATH=. python3 -m pytest tests -q
 
 # 2. Validate Hermes Desktop ESM bundle syntax
@@ -386,10 +356,6 @@ node --check desktop/plugin.js
 # 3. Run the official Hermes catalog & security validator
 hermes plugins validate . --json
 ```
-
-Verified status:
-- **Unit & Integration Tests:** `116 passed, 1 skipped` on standard Python (`117/117 passed` under Hermes's FastAPI environment, covering HTTP `200`/`422` dashboard endpoints, profile isolation, dual-gate DM capture, `BEGIN IMMEDIATE` lease contention, IANA DST/overnight quiet hours, allowlist path-traversal rejection, and live `config.yaml` merge preservation).
-- **Catalog Validator:** `ok: true` — **16/16 checks passed, 0 warnings**, zero private core imports, zero built-in tool collisions.
 
 ---
 
