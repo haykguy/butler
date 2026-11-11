@@ -129,7 +129,7 @@ Most accountability tools confuse **rudeness** with **persistence**. Butler give
    ```bash
    hermes plugins install haykguy/butler
    ```
-2. **Turn on the Desktop page once:** Hermes Desktop keeps a new plugin's sidebar page off until you allow it. Open **Settings → Plugins** and switch on **Proactive Assistant**.
+2. **Turn on the Desktop page once:** Hermes Desktop keeps a new plugin's sidebar page off until you allow it. Open **Capabilities → Plugins** (or **Settings → Plugins → Manage plugins**) and switch on **Butler - Proactive Assistant**.
 3. **Open Butler** in the left sidebar and click **Quick setup** — *or* simply text your Hermes assistant:
    > *"Set up Butler for my timezone, turn on Quiet Human Mode, and keep me accountable on my daily goals."*
 4. **Dial in your Tone, Persistence, Quiet Hours and daily check-in cap**, and click **Save Preferences**.
@@ -394,7 +394,7 @@ hermes plugins validate . --json
 - **Local binaries:** iMessage voice/image helpers run `ffmpeg`/`ffprobe` if present.
 - **Storage:** all state is plaintext SQLite/JSON in the profile's `plugin-data/butler/`. Inbound DM capture is off by default, needs two opt-ins, and captured records do not expire automatically.
 - **No telemetry.**
-- **Desktop:** packaged plugin pages start disabled; enable **Proactive Assistant** once in Settings → Plugins (sidebar label: **Butler**).
+- **Desktop:** packaged plugin pages start disabled; switch on **Butler - Proactive Assistant** once in Capabilities → Plugins (sidebar label: **Butler**).
 
 ---
 

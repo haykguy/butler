@@ -514,7 +514,7 @@ function Page({ ctx }) {
       })
       .catch((err) => {
         if (aliveGuard()) {
-          setError((err && err.message) || 'Could not load Proactive Assistant state.');
+          setError((err && err.message) || 'Could not load Butler.');
         }
         return null;
       });
@@ -827,7 +827,7 @@ function Page({ ctx }) {
       setDirtyPrefs(false);
       applyIncomingState(res, false);
       setWizardOpen(false);
-      setMessage(`Proactive Assistant armed (${wizardForm.tone} · ${wizardForm.persistence})${res.seeded_count ? ` with ${res.seeded_count} daily non-negotiable(s)` : ''}.`);
+      setMessage(`Butler armed (${wizardForm.tone} · ${wizardForm.persistence})${res.seeded_count ? ` with ${res.seeded_count} daily non-negotiable(s)` : ''}.`);
     } catch (err) {
       setError((err && err.message) || 'Quick setup failed.');
     } finally {
@@ -2133,7 +2133,7 @@ function Page({ ctx }) {
             h('button', { type: 'button', disabled: busy, style: styles.btn('secondary', busy), onClick: () => setWizardStep(3) }, '← Back'),
             !reviewApplied && h('button', { type: 'button', disabled: busy, style: styles.btn('secondary', busy), onClick: loadPromptReview }, 'Refresh review'),
             !reviewApplied && h('button', { type: 'button', disabled: busy || !reviewItems || !reviewItems.some((item) => item.selected), style: styles.btn('secondary', busy), onClick: applyPromptReview }, 'Apply selected changes'),
-            h('button', { type: 'button', disabled: busy, style: styles.btn('primary', busy), onClick: handleCompleteWizard }, busy ? 'Working…' : (reviewApplied ? 'Enable Proactive Assistant' : 'Skip review and enable')),
+            h('button', { type: 'button', disabled: busy, style: styles.btn('primary', busy), onClick: handleCompleteWizard }, busy ? 'Working…' : (reviewApplied ? 'Enable Butler' : 'Skip review and enable')),
           ),
         ),
       ),
@@ -2212,7 +2212,7 @@ function ProfilePage({ ctx }) {
 
 export default {
   id: 'butler',
-  name: 'Proactive Assistant',
+  name: 'Butler - Proactive Assistant',
   defaultEnabled: false,
   register(ctx) {
     ctx.register({
