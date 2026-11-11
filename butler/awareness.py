@@ -1,7 +1,9 @@
-"""Live time/lifetime pre_llm_call hook and butler_controls agent tool."""
+"""Live time/lifetime pre_llm_call hook, live turn route capture, and butler_controls tool."""
 from datetime import datetime, timezone
+import inspect
 import json
 import logging
+from pathlib import Path
 
 from .context import (
     build_lifetime_awareness_context,
@@ -10,12 +12,14 @@ from .context import (
     resolve_effective_timezone,
 )
 from .notifications import apply_system_controls_to_hermes, read_hermes_load_state
+from .policy import Policy
 from .settings import defaults, load, quiet_human_preset, save
 
 log = logging.getLogger(__name__)
 
 # Privacy boundary: never allow model tool calls to silently turn on plaintext DM
-# event capture (activityEnabled). Users control DM capture explicitly in UI/settings.
+# event capture (activityEnabled) or background outreach (notificationsEnabled).
+# Users control capture/wake switches explicitly in Butler Preferences.
 _MODEL_MUTABLE_KEYS = frozenset(
     set(defaults()) - {'activityEnabled', 'notificationsEnabled'}
 )
@@ -26,7 +30,7 @@ _CONTROLS_SCHEMA = {
         'action': {
             'type': 'string',
             'enum': ['status', 'detect_timezone', 'update', 'apply_preset'],
-            'description': 'status reads active time & notification/load controls; detect_timezone checks local OS (and optional IP) IANA timezone for onboarding; update modifies allowed settings; apply_preset applies quiet_human or default controls.',
+            'description': 'status reads active time, cadence, quota & notification/load controls; detect_timezone checks local OS (and optional IP) IANA timezone for onboarding; update modifies allowed settings; apply_preset applies quiet_human or default controls.',
         },
         'use_ip': {
             'type': 'boolean',
@@ -47,30 +51,169 @@ _CONTROLS_SCHEMA = {
 }
 
 
+class _NoopRouteRegistry:
+    def record_route(self, route, preferred=True):
+        return None
+
+    def close(self):
+        return None
+
+
+def _call_capture_bound_turn_route():
+    try:
+        from . import routes as _routes
+        return _routes.capture_bound_turn_route()
+    except ImportError:
+        return None
+
+
+def _open_route_registry(db_path):
+    try:
+        from . import routes as _routes
+        return _routes.RouteRegistry(db_path)
+    except ImportError:
+        return _NoopRouteRegistry()
+
+
+def _call_describe_cadence(settings: dict) -> dict:
+    try:
+        from . import followup as _followup
+        return _followup.describe_cadence(settings)
+    except ImportError:
+        return {
+            'tone': settings.get('tone', 'Balanced'),
+            'persistence': settings.get('persistence', 'Occasional'),
+            'quiet_enabled': bool(settings.get('quietEnabled', False)),
+            'quiet_window': (
+                f"{settings.get('quietStart', '')}-{settings.get('quietEnd', '')}"
+                if settings.get('quietEnabled') else None
+            ),
+            'daily_limit': settings.get('dailyLimit'),
+        }
+
+
+def _quota_status(prof_dir: Path, settings: dict, now: datetime, effective_timezone: str) -> dict:
+    policy = Policy(prof_dir)
+    if hasattr(policy, 'wake_quota_status'):
+        try:
+            return policy.wake_quota_status(now, fallback_timezone=effective_timezone)
+        except Exception:
+            log.debug('Butler could not read wake quota status', exc_info=True)
+    return {
+        'notifications_enabled': bool(settings.get('notificationsEnabled', False)),
+        'paused': bool(settings.get('paused', False)),
+        'daily_limit': settings.get('dailyLimit'),
+        'used_today': 0,
+    }
+
+
+capture_bound_turn_route = _call_capture_bound_turn_route
+RouteRegistry = _open_route_registry
+describe_cadence = _call_describe_cadence
+
+
 def _default_directory():
     from plugins.plugin_storage import plugin_data_dir
     return plugin_data_dir('butler')
 
 
+def _format_responsibilities_fallback(items: list[dict]) -> str:
+    lines = [f'[Butler Active Responsibilities ({len(items)})]']
+    for it in items[:8]:
+        kind = it.get('kind') or 'commitment'
+        due = it.get('due_at')
+        due_str = due.isoformat() if hasattr(due, 'isoformat') else str(due or '')
+        lines.append(f"- [{kind}] {it.get('title', '')} (id={it.get('id', '')}, due={due_str})")
+    if len(items) > 8:
+        lines.append(f'- ...and {len(items) - 8} more active items (use butler_manage action=list).')
+    return '\n'.join(lines)
+
+
 class AwarenessHooks:
-    def __init__(self, directory=_default_directory, load_state=read_hermes_load_state,
-                 now_fn=lambda: datetime.now(timezone.utc), system_tz_fn=detect_system_timezone):
+    def __init__(
+        self,
+        directory=_default_directory,
+        load_state=read_hermes_load_state,
+        now_fn=lambda: datetime.now(timezone.utc),
+        system_tz_fn=detect_system_timezone,
+        *,
+        on_bound_turn=None,
+        store_factory=None,
+        route_registry_factory=None,
+    ):
         self.directory = directory
         self.load_state = load_state
         self.now_fn = now_fn
         self.system_tz_fn = system_tz_fn
+        self.on_bound_turn = on_bound_turn
+        self.store_factory = store_factory
+        self.route_registry_factory = route_registry_factory
 
-    def pre_llm_call(self, *, conversation_history=None, is_first_turn=False,
-                     platform='', parent_session_id='', **kwargs):
+    def _capture_turn_route_and_start(self, prof_dir: Path) -> None:
+        route = capture_bound_turn_route()
+        if not isinstance(route, dict) or not route.get('route_id'):
+            return
+        try:
+            prof_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
+            reg = (
+                self.route_registry_factory()
+                if self.route_registry_factory is not None
+                else RouteRegistry(prof_dir / 'responsibilities.sqlite3')
+            )
+            if reg is not None:
+                try:
+                    reg.record_route(route, preferred=True)
+                finally:
+                    if hasattr(reg, 'close'):
+                        reg.close()
+        except Exception:
+            log.debug('Butler could not record bound turn route', exc_info=True)
+        if callable(self.on_bound_turn):
+            try:
+                self.on_bound_turn()
+            except Exception:
+                log.warning('Butler bound-turn starter failed', exc_info=True)
+
+    def _load_active_responsibilities(self, prof_dir: Path) -> list[dict]:
+        db_file = prof_dir / 'responsibilities.sqlite3'
+        if self.store_factory is None and not db_file.exists():
+            return []
+        try:
+            from .store import ResponsibilityStore
+            store = self.store_factory() if self.store_factory is not None else ResponsibilityStore(db_file)
+            try:
+                return [
+                    it for it in store.list()
+                    if isinstance(it, dict) and it.get('status') == 'active'
+                ]
+            finally:
+                if hasattr(store, 'close'):
+                    store.close()
+        except Exception:
+            log.debug('Butler could not read active responsibilities', exc_info=True)
+            return []
+
+    def pre_llm_call(
+        self,
+        *,
+        conversation_history=None,
+        is_first_turn=False,
+        platform='',
+        parent_session_id='',
+        **kwargs,
+    ):
         # Skip delegated child subagent turns so child prompts stay clean.
         if parent_session_id:
             return None
         try:
-            settings = load(self.directory())
+            prof_dir = Path(self.directory())
+            self._capture_turn_route_and_start(prof_dir)
+            settings = load(prof_dir)
             live_cfg = self.load_state()
             cfg_tz = live_cfg.get('timezone', '') if isinstance(live_cfg, dict) else ''
-            text = build_lifetime_awareness_context(
-                settings,
+            active_items = self._load_active_responsibilities(prof_dir)
+
+            ctx_kwargs = dict(
                 now=self.now_fn(),
                 conversation_history=conversation_history,
                 is_first_turn=bool(is_first_turn),
@@ -78,8 +221,24 @@ class AwarenessHooks:
                 config_timezone=cfg_tz,
                 system_timezone=self.system_tz_fn(),
             )
+            accepts_active = False
+            if active_items:
+                try:
+                    sig = inspect.signature(build_lifetime_awareness_context)
+                    accepts_active = (
+                        'active_responsibilities' in sig.parameters
+                        or any(p.kind == inspect.Parameter.VAR_KEYWORD for p in sig.parameters.values())
+                    )
+                except (TypeError, ValueError):
+                    accepts_active = False
+                if accepts_active:
+                    ctx_kwargs['active_responsibilities'] = active_items
+
+            text = build_lifetime_awareness_context(settings, **ctx_kwargs)
             if not text:
                 return None
+            if active_items and not accepts_active:
+                text = text + '\n' + _format_responsibilities_fallback(active_items)
             return {'context': text}
         except Exception:
             log.exception('Butler could not build lifetime awareness context')
@@ -94,11 +253,19 @@ def register_awareness_and_controls(
     config_saver=None,
     ip_tz_fn=detect_ip_timezone,
     system_tz_fn=detect_system_timezone,
+    now_fn=lambda: datetime.now(timezone.utc),
+    on_bound_turn=None,
+    store_factory=None,
+    route_registry_factory=None,
 ):
     hooks = AwarenessHooks(
         directory=directory,
         load_state=lambda: read_hermes_load_state(config_loader=config_loader),
+        now_fn=now_fn,
         system_tz_fn=system_tz_fn,
+        on_bound_turn=on_bound_turn,
+        store_factory=store_factory,
+        route_registry_factory=route_registry_factory,
     )
     ctx.register_hook('pre_llm_call', hooks.pre_llm_call)
 
@@ -106,7 +273,7 @@ def register_awareness_and_controls(
         try:
             args = args or {}
             action = args.get('action')
-            prof_dir = directory()
+            prof_dir = Path(directory())
             current = load(prof_dir)
             live_cfg = read_hermes_load_state(config_loader=config_loader)
             sys_tz = system_tz_fn()
@@ -115,17 +282,20 @@ def register_awareness_and_controls(
                 eff_tz, eff_src = resolve_effective_timezone(
                     current, config_timezone=live_cfg.get('timezone', ''), system_timezone=sys_tz,
                 )
+                now = now_fn()
                 return json.dumps({
                     'ok': True,
                     'effective_timezone': eff_tz,
                     'effective_timezone_source': eff_src,
                     'detected_system_timezone': sys_tz,
                     'settings': current,
+                    'cadence': describe_cadence(current),
+                    'quota': _quota_status(prof_dir, current, now, eff_tz),
                     'hermes_live_config': live_cfg,
                     'notes': {
                         'gateway_restart_banner': 'gatewayRestartNotifications=false suppresses Hermes static Gateway online startup/restart pings on configured platforms; Hermes core has no public custom template hook for that static banner, while naturalStatusStyle governs assistant-written status messages.',
                     },
-                })
+                }, default=str)
 
             if action == 'detect_timezone':
                 use_ip = bool(args.get('use_ip', False))
@@ -191,9 +361,9 @@ def register_awareness_and_controls(
         schema=_CONTROLS_SCHEMA,
         handler=controls,
         description=(
-            'Inspect or update Butler live time/timezone awareness (including local OS or opt-in IP timezone detection for onboarding) '
-            'and Hermes system notification / load controls (muting provider fallback/rate-limit warnings, tool progress spam, interim narration, '
-            'skill creation nudges, memory notices, and static gateway restart banners).'
+            'Inspect or update Butler live time/timezone awareness (including local OS or opt-in IP timezone detection for onboarding), '
+            'proactive follow-up cadence/quota, and Hermes system notification / load controls (muting provider fallback/rate-limit warnings, '
+            'tool progress spam, interim narration, skill creation nudges, memory notices, and static gateway restart banners).'
         ),
     )
     return hooks
