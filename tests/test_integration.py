@@ -90,7 +90,7 @@ def test_entrypoint_registers_declared_tools_and_lifecycle():
         spec.loader.exec_module(module)
         ctx = Context()
         module.register(ctx)
-        assert set(ctx.tools) == {'butler_create', 'butler_manage', 'butler_expression', 'butler_controls', 'butler_imessage'}
+        assert set(ctx.tools) == {'butler_create', 'butler_manage', 'butler_expression', 'butler_controls', 'butler_imessage', 'butler_phone'}
         assert set(ctx.hooks) == {'post_gateway_admission', 'pre_llm_call', 'post_llm_call'}
         assert len(ctx.hooks['post_gateway_admission']) == 2
         assert len(ctx.hooks['pre_llm_call']) == 2

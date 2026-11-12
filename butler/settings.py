@@ -19,7 +19,12 @@ _BOOL_KEYS = (
     'busyAckNotifications', 'longRunningNotifications',
     'skillNudgesEnabled', 'gatewayRestartNotifications',
     'gatewayMessageTimestamps', 'naturalStatusStyle',
+    'phoneEnabled', 'ownerRingEnabled', 'quietHoursBreakthrough',
+    'inboundScreeningEnabled',
 )
+
+_E164_RE = re.compile(r'^\+[1-9]\d{6,14}$')
+_AGENT_NAME_RE = re.compile(r'^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$')
 
 
 def defaults():
@@ -50,6 +55,15 @@ def defaults():
         gatewayRestartNotifications=False,
         gatewayMessageTimestamps=True,
         naturalStatusStyle=True,
+        phoneEnabled=False,
+        ownerRingEnabled=False,
+        ownerPhone='',
+        quietHoursBreakthrough=False,
+        maxRingsPerHour=3,
+        minRingGapSeconds=120,
+        inboundScreeningEnabled=False,
+        livekitAgentName='butler-voice',
+        callerName='Butler',
     )
 
 
@@ -120,6 +134,19 @@ def validate(data):
             raise ValueError(f'Invalid {key}')
     if data['quietEnabled'] and (not data['quietStart'] or not data['quietEnd'] or data['quietStart'] == data['quietEnd']):
         raise ValueError('Quiet hours require distinct start and end times')
+    if not isinstance(data['ownerPhone'], str) or len(data['ownerPhone']) > 20:
+        raise ValueError('Invalid ownerPhone')
+    if data['ownerPhone'] and not _E164_RE.fullmatch(data['ownerPhone']):
+        raise ValueError('ownerPhone must be E.164 (e.g. +14155551234) or empty')
+    if type(data['maxRingsPerHour']) is not int or not 1 <= data['maxRingsPerHour'] <= 20:
+        raise ValueError('maxRingsPerHour must be an integer 1-20')
+    if type(data['minRingGapSeconds']) is not int or not 30 <= data['minRingGapSeconds'] <= 86400:
+        raise ValueError('minRingGapSeconds must be an integer 30-86400')
+    if not isinstance(data['livekitAgentName'], str) or not _AGENT_NAME_RE.fullmatch(data['livekitAgentName']):
+        raise ValueError('Invalid livekitAgentName')
+    if (not isinstance(data['callerName'], str) or not 1 <= len(data['callerName'].strip()) <= 64
+            or any(ord(ch) < 32 for ch in data['callerName'])):
+        raise ValueError('Invalid callerName')
     cleaned = dict(data)
     cleaned['displayName'] = display_name.strip()
     return cleaned

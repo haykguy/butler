@@ -391,6 +391,10 @@ def test_desktop_plugin_js_passes_admission_lint_and_sync():
         'Quick Setup',
         'Persistent · model-chosen timing',
         'awaiting next touch decision',
+        'Phone Calling & Voice Escalation',
+        '/phone/plans/',
+        '/phone/calls/',
+        '/phone/kill-switch',
     ):
         assert expected in src, f'Missing expected UI contract token: {expected}'
 
@@ -480,3 +484,126 @@ def test_display_name_paused_check_in_and_real_runner_trigger(tmp_path, monkeypa
         assert len(injected) == 2
     finally:
         env['api']._runner.set_active_runner(None)
+
+
+def test_phone_dashboard_endpoints_masking_and_double_gate(tmp_path, monkeypatch):
+    from butler.phone import PhoneStore
+    from butler.settings import load as load_settings
+
+    env = _load_api_module(tmp_path, monkeypatch)
+    client = env['client']
+    prof = env['profile_dir']
+    now_dt = env['clock'][0]
+
+    raw_owner = '+13125550199'
+    raw_third_party = '+14155550142'
+
+    # Save phone preferences via PUT /settings; response must mask ownerPhone
+    s = defaults()
+    s.update({
+        'phoneEnabled': True,
+        'ownerRingEnabled': True,
+        'ownerPhone': raw_owner,
+        'maxRingsPerHour': 4,
+        'minRingGapSeconds': 180,
+    })
+    r_put = client.put('/api/plugins/butler/settings', json=s)
+    assert r_put.status_code == 200
+    put_body = r_put.json()
+    assert raw_owner not in str(put_body)
+    assert put_body['ownerPhone'].endswith('0199')
+    assert '*' in put_body['ownerPhone']
+    assert load_settings(prof)['ownerPhone'] == raw_owner
+
+    # Saving back the masked ownerPhone preserves raw E.164 on disk
+    put_body['maxRingsPerHour'] = 5
+    r_put2 = client.put('/api/plugins/butler/settings', json=put_body)
+    assert r_put2.status_code == 200
+    assert load_settings(prof)['ownerPhone'] == raw_owner
+    assert load_settings(prof)['maxRingsPerHour'] == 5
+
+    # Draft two outbound plans directly in PhoneStore
+    ps = PhoneStore(prof)
+    p1 = ps.draft_plan(
+        to_number=raw_third_party,
+        recipient_label='Clinic Desk',
+        objective='Confirm Friday checkup time',
+        ai_disclosure_opening='Hello, this is an automated AI assistant calling from Butler on behalf of the patient.',
+        now=now_dt,
+    )
+    p2 = ps.draft_plan(
+        to_number=raw_third_party,
+        recipient_label='Pharmacy',
+        objective='Check refill readiness',
+        ai_disclosure_opening='Hello, this is an automated AI assistant calling from Butler.',
+        now=now_dt,
+    )
+
+    # /state returns masked phone state with zero raw phone numbers
+    r_state = client.get('/api/plugins/butler/state')
+    assert r_state.status_code == 200
+    state_json = r_state.json()
+    assert raw_owner not in str(state_json)
+    assert raw_third_party not in str(state_json)
+    phone = state_json['phone']
+    assert phone['phone_enabled'] is True
+    assert len(phone['pending_plans']) == 2
+
+    # Approve with wrong SHA-256 -> 409 conflict
+    r_bad_sha = client.post(
+        f"/api/plugins/butler/phone/plans/{p1['plan_id']}/approve",
+        json={'sha256': '0' * 64},
+    )
+    assert r_bad_sha.status_code == 409
+    assert r_bad_sha.json()['detail']['code'] == 'script_sha256_mismatch'
+
+    # Approve with exact SHA-256 -> 200 approved
+    r_approve = client.post(
+        f"/api/plugins/butler/phone/plans/{p1['plan_id']}/approve",
+        json={'sha256': p1['script_sha256']},
+    )
+    assert r_approve.status_code == 200
+    assert r_approve.json()['plan']['status'] == 'approved'
+    assert raw_third_party not in str(r_approve.json())
+
+    # Reject second plan -> 200 rejected
+    r_reject = client.post(
+        f"/api/plugins/butler/phone/plans/{p2['plan_id']}/reject",
+        json={'reason': 'No longer needed'},
+    )
+    assert r_reject.status_code == 200
+    assert r_reject.json()['plan']['status'] == 'rejected'
+
+    # Place p1 with fake dispatch fn, then cancel active call via API
+    placed = ps.place_call(
+        p1['plan_id'],
+        now=now_dt,
+        env_override={
+            'LIVEKIT_URL': 'wss://example.livekit.cloud',
+            'LIVEKIT_API_KEY': 'test_key',
+            'LIVEKIT_API_SECRET': 'test_secret_0123456789abcdef',
+            'LIVEKIT_SIP_TRUNK_ID': 'ST_test123',
+        },
+        dispatch_fn=lambda **kw: {'dispatch_id': 'AD_test1'},
+    )
+    r_cancel = client.post(
+        f"/api/plugins/butler/phone/calls/{placed['call_id']}/cancel",
+        json={'reason': 'User cancelled'},
+    )
+    assert r_cancel.status_code == 200
+    assert r_cancel.json()['call']['status'] == 'cancelled'
+
+    # Engage and clear master phone kill-switch
+    r_stop = client.post(
+        '/api/plugins/butler/phone/kill-switch',
+        json={'action': 'stop', 'reason': 'Testing emergency stop'},
+    )
+    assert r_stop.status_code == 200
+    assert r_stop.json()['phone']['phone_stopped'] is True
+
+    r_resume = client.post(
+        '/api/plugins/butler/phone/kill-switch',
+        json={'action': 'resume'},
+    )
+    assert r_resume.status_code == 200
+    assert r_resume.json()['phone']['phone_stopped'] is False

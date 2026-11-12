@@ -37,7 +37,12 @@ def test_reject_invalid_settings_without_overwriting(tmp_path):
     {'dailyLimit': True}, {'dailyLimit': 1001}, {'quietEnabled': 'true'},
     {'quietEnabled': True}, {'quietStart': '25:00'}, {'notificationsEnabled': 1},
     {'toolProgressMode': 'loud'}, {'backgroundProcessNotifications': 'loud'},
-    {'memoryNotifications': 'loud'}, {'lifetimeAwarenessEnabled': 'yes'},
+    {'memoryNotifications': 'loud'},    {'lifetimeAwarenessEnabled': 'yes'},
+    {'phoneEnabled': 'yes'}, {'ownerRingEnabled': 1},
+    {'ownerPhone': '4155551234'}, {'ownerPhone': '+0123456789'},
+    {'maxRingsPerHour': 0}, {'maxRingsPerHour': 21}, {'maxRingsPerHour': True},
+    {'minRingGapSeconds': 29}, {'minRingGapSeconds': 90000},
+    {'livekitAgentName': 'bad space'}, {'callerName': ''},
     {'unknown': 'x'},
 ])
 def test_invalid_values_are_rejected(tmp_path, patch):

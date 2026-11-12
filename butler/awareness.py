@@ -19,12 +19,25 @@ from .settings import defaults, load, quiet_human_preset, save
 
 log = logging.getLogger(__name__)
 
-# Privacy boundary: never allow model tool calls to silently turn on plaintext DM
-# event capture (activityEnabled) or background outreach (notificationsEnabled).
-# Users control capture/wake switches explicitly in Butler Preferences.
-_MODEL_MUTABLE_KEYS = frozenset(
-    set(defaults()) - {'activityEnabled', 'notificationsEnabled', 'maxUnanswered', 'minWakeGapMinutes'}
-)
+# Privacy & telephony safety boundary: never allow model tool calls to silently turn on
+# plaintext DM capture, background outreach, or phone calling / rate-limit / target settings.
+# Users control capture, wake, and phone switches explicitly in Butler Preferences.
+_PRIVACY_GATED_KEYS = frozenset({
+    'activityEnabled',
+    'notificationsEnabled',
+    'maxUnanswered',
+    'minWakeGapMinutes',
+    'phoneEnabled',
+    'ownerRingEnabled',
+    'ownerPhone',
+    'quietHoursBreakthrough',
+    'inboundScreeningEnabled',
+    'maxRingsPerHour',
+    'minRingGapSeconds',
+    'livekitAgentName',
+    'callerName',
+})
+_MODEL_MUTABLE_KEYS = frozenset(set(defaults()) - _PRIVACY_GATED_KEYS)
 
 
 def _setting_value_schema(key, value):
@@ -291,6 +304,33 @@ class AwarenessHooks:
             log.debug('Butler could not finalize its proactive response', exc_info=True)
         return None
 
+    def _load_phone_awareness(
+        self, prof_dir: Path, settings: dict, now: datetime, eff_tz: str
+    ) -> dict | None:
+        db_file = prof_dir / 'responsibilities.sqlite3'
+        if not settings.get('phoneEnabled') and not db_file.exists():
+            return None
+        try:
+            from .phone import PhoneStore
+            from .policy import Policy
+
+            summary = PhoneStore(prof_dir).status_summary(now=now)
+            if (
+                not summary.get('phone_enabled')
+                and not summary.get('phone_stopped')
+                and not summary.get('pending_plans')
+                and not summary.get('approved_plans')
+                and not summary.get('active_call')
+            ):
+                return None
+            summary['owner_ring_policy'] = Policy(prof_dir).evaluate_owner_ring(
+                now, fallback_timezone=eff_tz or 'UTC'
+            )
+            return summary
+        except Exception:
+            log.debug('Butler could not read phone awareness status', exc_info=True)
+            return None
+
     def pre_llm_call(
         self,
         *,
@@ -313,8 +353,12 @@ class AwarenessHooks:
             settings = load(prof_dir)
             live_cfg = self.load_state()
             cfg_tz = live_cfg.get('timezone', '') if isinstance(live_cfg, dict) else ''
+            now_dt = self.now_fn()
+            sys_tz = self.system_tz_fn()
+            eff_tz, _ = resolve_effective_timezone(settings, config_timezone=cfg_tz, system_timezone=sys_tz)
             active_items = self._load_active_responsibilities(prof_dir, route_id=route_id)
             engagement = self._track_engagement(prof_dir, user_message)
+            phone_status = self._load_phone_awareness(prof_dir, settings, now_dt, eff_tz)
             pending = None
             if isinstance(user_message, str) and user_message.strip() == VISIBLE_WAKE_MARKER and route_id:
                 from .store import ResponsibilityStore
@@ -355,6 +399,17 @@ class AwarenessHooks:
                 # directive, and lets submitted items surface as awaiting a decision.
                 ctx_kwargs['active_responsibilities'] = active_items
                 ctx_kwargs['engagement'] = engagement
+            accepts_phone = False
+            try:
+                sig_p = inspect.signature(build_lifetime_awareness_context)
+                accepts_phone = (
+                    'phone_status' in sig_p.parameters
+                    or any(p.kind == inspect.Parameter.VAR_KEYWORD for p in sig_p.parameters.values())
+                )
+            except (TypeError, ValueError):
+                accepts_phone = False
+            if phone_status is not None and accepts_phone:
+                ctx_kwargs['phone_status'] = phone_status
 
             text = build_lifetime_awareness_context(settings, **ctx_kwargs) or ''
             if active_items and not accepts_active:
@@ -406,6 +461,12 @@ def register_awareness_and_controls(
                     current, config_timezone=live_cfg.get('timezone', ''), system_timezone=sys_tz,
                 )
                 now = now_fn()
+                phone_info = None
+                try:
+                    from .phone import PhoneStore
+                    phone_info = PhoneStore(prof_dir).status_summary(now=now)
+                except Exception:
+                    log.debug('Butler controls could not read phone status', exc_info=True)
                 return json.dumps({
                     'ok': True,
                     'effective_timezone': eff_tz,
@@ -414,6 +475,7 @@ def register_awareness_and_controls(
                     'settings': current,
                     'cadence': describe_cadence(current),
                     'quota': _quota_status(prof_dir, current, now, eff_tz),
+                    'phone': phone_info,
                     'hermes_live_config': live_cfg,
                     'notes': {
                         'gateway_restart_banner': 'gatewayRestartNotifications=false suppresses Hermes static Gateway online startup/restart pings on configured platforms; Hermes core has no public custom template hook for that static banner, while naturalStatusStyle governs assistant-written status messages.',

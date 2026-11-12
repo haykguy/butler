@@ -16,3 +16,16 @@ def hermes_home() -> Path:
     except ImportError:
         return Path(os.environ.get('HERMES_HOME', '~/.hermes')).expanduser()
     return Path(get_hermes_home()).expanduser()
+
+
+def butler_data_dir(*, create: bool = False) -> Path:
+    """Active profile's plugin-data/butler directory without creating on read unless asked."""
+    if create:
+        try:
+            from plugins.plugin_storage import plugin_data_dir
+            return Path(plugin_data_dir('butler')).expanduser()
+        except ImportError:
+            root = hermes_home() / 'plugin-data' / 'butler'
+            root.mkdir(parents=True, exist_ok=True, mode=0o700)
+            return root
+    return hermes_home() / 'plugin-data' / 'butler'

@@ -238,3 +238,43 @@ def test_hermes_load_controls_patch_and_tool_privacy_boundary(tmp_path):
     assert ('gateway', 'message_timestamps', 'enabled') in pkeys
     res = apply_system_controls_to_hermes(quiet_human_preset(), config_loader=fake_loader, config_saver=fake_saver)
     assert res['applied'] is True
+
+
+def test_phone_awareness_context_injection_masks_numbers(tmp_path):
+    from butler.phone import PhoneStore
+
+    now = datetime(2026, 11, 11, 15, 0, 0, tzinfo=timezone.utc)
+    cfg = dict(
+        defaults(),
+        timezone='America/Chicago',
+        phoneEnabled=True,
+        ownerRingEnabled=True,
+        ownerPhone='+14155550123',
+    )
+    save(tmp_path, cfg)
+    pstore = PhoneStore(tmp_path)
+    plan = pstore.draft_plan(
+        to_number='+14155550199',
+        recipient_label='Dentist Office',
+        objective='Reschedule cleaning to Friday morning',
+        now=now,
+    )
+
+    hooks = AwarenessHooks(
+        directory=lambda: tmp_path,
+        load_state=lambda: {'available': True, 'timezone': ''},
+        now_fn=lambda: now,
+        system_tz_fn=lambda: 'America/Chicago',
+    )
+    injected = hooks.pre_llm_call(
+        conversation_history=[{'role': 'user', 'content': 'status?', 'timestamp': now.timestamp()}],
+        is_first_turn=True,
+        platform='desktop',
+    )
+    assert injected is not None
+    text = injected['context']
+    assert '[Butler Phone Calling]' in text
+    assert plan['plan_id'] in text
+    assert 'Dentist Office' in text
+    assert '+14155550199' not in text
+    assert '+14155550123' not in text

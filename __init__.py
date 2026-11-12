@@ -6,6 +6,7 @@ from .butler.awareness import register_awareness_and_controls
 from .butler.event_hooks import register_event_hooks
 from .butler.expressions import register_expression_tools
 from .butler.imessage_tools import register_imessage_tools
+from .butler.phone_tools import register_phone_tools
 from .butler.runner import Runner, get_active_runner, set_active_runner
 from .butler.tools import register_tools
 
@@ -54,6 +55,7 @@ def register(ctx):
     register_tools(ctx)
     register_expression_tools(ctx)
     register_imessage_tools(ctx)
+    register_phone_tools(ctx)
     register_event_hooks(ctx)
     register_awareness_and_controls(ctx, on_bound_turn=start)
     ctx.register_hook('post_gateway_admission', start)

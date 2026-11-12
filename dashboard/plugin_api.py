@@ -7,6 +7,7 @@ import re
 from pathlib import Path
 import sqlite3
 import sys
+from typing import NoReturn
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from fastapi import APIRouter, HTTPException
@@ -29,8 +30,8 @@ def _load_butler_modules():
 
     loaded = {}
     for mod_name in (
-        'settings', 'context', 'notifications', 'store',
-        'routes', 'policy', 'followup', 'runner', 'prompt_review',
+        'paths', 'settings', 'context', 'notifications', 'store',
+        'routes', 'policy', 'followup', 'runner', 'prompt_review', 'phone',
     ):
         full_name = f'{pkg_name}.{mod_name}'
         mod_file = pkg_dir / f'{mod_name}.py'
@@ -57,13 +58,14 @@ _policy = _MODS.get('policy')
 _followup = _MODS.get('followup')
 _runner = _MODS.get('runner')
 _prompt_review = _MODS.get('prompt_review')
+_phone = _MODS.get('phone')
 
 _config_loader = None
 _config_saver = None
 _sys_tz_fn = None
-_ip_tz_fn = None
 _now_fn = None
 _state_db_path_fn = None
+_phone_env_override: dict[str, str] | None = None
 
 router = APIRouter()
 
@@ -551,9 +553,10 @@ def state():
     commitments = [r for r in rows if r.get('kind') != 'non_negotiable']
     quota = _fallback_quota(directory, now, tz_for_calc, settings)
     cadence_info = _fallback_describe_cadence(settings)
+    phone_state = _load_phone_dashboard_state(directory, settings, now, tz_for_calc)
 
     return {
-        'settings': settings,
+        'settings': _public_settings(settings),
         'responsibilities': rows,
         'non_negotiables': non_negotiables,
         'commitments': commitments,
@@ -568,6 +571,7 @@ def state():
         'routes': routes_list,
         'recent_activity': wake_logs,
         'cadence_info': cadence_info,
+        'phone': phone_state,
         'allow_gateway_injection': allow_gw,
         'plugin_enabled': plugin_enabled,
         'hermes_live_config': live_cfg,
@@ -625,7 +629,7 @@ def apply_preset(payload: dict):
         if saved.get('applySystemControls') else {'applied': False, 'reason': 'applySystemControls is false'}
     )
     return {
-        'settings': saved,
+        'settings': _public_settings(saved),
         'hermes_sync': sync_result,
         'hermes_live_config': _notifications.read_hermes_load_state(config_loader=_config_loader),
     }
@@ -1109,3 +1113,224 @@ def check_in_now(payload: dict | None = None):
             'queued_count': len(targets),
             'detail': f'Scheduled immediate check-in for {len(targets)} item(s) — background runner will pick it up momentarily.',
         }
+
+
+def _mask_phone_value(raw: str) -> str:
+    val = str(raw or '').strip()
+    if not val:
+        return ''
+    if _phone is not None and hasattr(_phone, 'mask_phone'):
+        return str(_phone.mask_phone(val))
+    if len(val) <= 4:
+        return '****'
+    prefix = val[:2] if val.startswith('+') and len(val) > 6 else ''
+    return f'{prefix}******{val[-4:]}'
+
+
+def _public_settings(settings: dict) -> dict:
+    out = dict(settings)
+    raw_owner = str(out.get('ownerPhone') or '').strip()
+    if raw_owner:
+        out['ownerPhone'] = _mask_phone_value(raw_owner)
+    return out
+
+
+def _merge_masked_owner_phone(existing: dict, incoming: dict | None) -> dict:
+    merged = dict(incoming or {})
+    if 'ownerPhone' in merged and isinstance(merged['ownerPhone'], str):
+        existing_raw = str(existing.get('ownerPhone') or '').strip()
+        masked_existing = _mask_phone_value(existing_raw) if existing_raw else ''
+        if masked_existing and merged['ownerPhone'].strip() == masked_existing:
+            merged['ownerPhone'] = existing_raw
+    return merged
+
+
+def _load_phone_dashboard_state(
+    directory: Path, settings: dict, now: datetime, eff_tz: str
+) -> dict:
+    if _phone is None or not hasattr(_phone, 'PhoneStore'):
+        return {
+            'phone_enabled': bool(settings.get('phoneEnabled')),
+            'owner_ring_enabled': bool(settings.get('ownerRingEnabled')),
+            'owner_phone_masked': _mask_phone_value(str(settings.get('ownerPhone') or '')),
+            'quiet_hours_breakthrough': bool(settings.get('quietHoursBreakthrough')),
+            'inbound_screening_enabled': bool(settings.get('inboundScreeningEnabled')),
+            'max_rings_per_hour': int(settings.get('maxRingsPerHour') or 3),
+            'min_ring_gap_seconds': int(settings.get('minRingGapSeconds') or 120),
+            'rings_last_hour': 0,
+            'livekit_agent_name': str(settings.get('livekitAgentName') or 'butler-voice'),
+            'caller_name': str(settings.get('callerName') or 'Butler'),
+            'credentials_ready': False,
+            'configured_env': [],
+            'missing_env': [],
+            'phone_stopped': False,
+            'phone_stopped_reason': '',
+            'phone_stopped_at': None,
+            'active_call': None,
+            'pending_plans': [],
+            'approved_plans': [],
+            'recent_plans': [],
+            'recent_calls': [],
+            'owner_ring_policy': {'allowed': False, 'reason': 'phone_unavailable'},
+        }
+    ps = _phone.PhoneStore(directory)
+    summary = ps.status_summary(now=now, env_override=_phone_env_override)
+    summary['recent_plans'] = ps.list_plans(limit=25)
+    if _policy is not None and hasattr(_policy, 'Policy'):
+        summary['owner_ring_policy'] = _policy.Policy(directory).evaluate_owner_ring(
+            now, fallback_timezone=eff_tz or 'UTC',
+        )
+    else:
+        summary['owner_ring_policy'] = {'allowed': False, 'reason': 'policy_unavailable'}
+    return summary
+
+
+def _raise_phone_http_error(exc: Exception) -> NoReturn:
+    code = str(getattr(exc, 'code', '') or '')
+    msg = str(exc)
+    if code in ('plan_not_found', 'call_not_found'):
+        raise HTTPException(status_code=404, detail={'code': code, 'message': msg}) from exc
+    if code in (
+        'script_sha256_mismatch',
+        'phone_stopped_kill_switch',
+        'invalid_plan_status',
+        'approval_expired',
+        'plan_expired',
+        'single_active_call_lock',
+    ):
+        raise HTTPException(status_code=409, detail={'code': code, 'message': msg}) from exc
+    raise HTTPException(status_code=422, detail={'code': code or 'phone_error', 'message': msg}) from exc
+
+
+def _record_phone_audit(directory: Path, now: datetime, action: str, outcome: str, detail: str) -> None:
+    if _store is None:
+        return
+    db_path = directory / 'responsibilities.sqlite3'
+    try:
+        with _store.ResponsibilityStore(db_path) as st:
+            st.record_wake_log(None, now, action, outcome, detail)
+    except Exception:
+        pass
+
+
+@_register_route('post', '/phone/plans/{plan_id}/approve')
+def approve_phone_plan(plan_id: str, payload: dict | None = None):
+    if _phone is None:
+        raise HTTPException(status_code=503, detail='Phone store unavailable')
+    body = payload or {}
+    expected_sha = str(
+        body.get('expected_sha256') or body.get('script_sha256') or body.get('sha256') or ''
+    ).strip() or None
+    directory = Path(plugin_data_dir('butler'))
+    settings, _live_cfg, _sys_tz, eff_tz, _eff_src, _raw_cfg = _resolve_context(directory)
+    now = _now()
+    ps = _phone.PhoneStore(directory)
+    try:
+        plan = ps.approve_plan(
+            plan_id,
+            approved_by='desktop_ui',
+            expected_sha256=expected_sha,
+            now=now,
+        )
+    except Exception as exc:
+        if isinstance(exc, HTTPException):
+            raise
+        _raise_phone_http_error(exc)
+    _record_phone_audit(
+        directory, now, 'phone_plan_approved', 'ok',
+        f"Approved outbound call plan {plan['plan_id']} ({plan['masked_number']})",
+    )
+    return {
+        'ok': True,
+        'plan': plan,
+        'phone': _load_phone_dashboard_state(directory, settings, now, eff_tz or 'UTC'),
+    }
+
+
+@_register_route('post', '/phone/plans/{plan_id}/reject')
+def reject_phone_plan(plan_id: str, payload: dict | None = None):
+    if _phone is None:
+        raise HTTPException(status_code=503, detail='Phone store unavailable')
+    body = payload or {}
+    reason = str(body.get('reason') or 'Rejected in Control Center').strip()
+    directory = Path(plugin_data_dir('butler'))
+    settings, _live_cfg, _sys_tz, eff_tz, _eff_src, _raw_cfg = _resolve_context(directory)
+    now = _now()
+    ps = _phone.PhoneStore(directory)
+    try:
+        plan = ps.reject_plan(plan_id, reason=reason, now=now)
+    except Exception as exc:
+        if isinstance(exc, HTTPException):
+            raise
+        _raise_phone_http_error(exc)
+    _record_phone_audit(
+        directory, now, 'phone_plan_rejected', 'ok',
+        f"Rejected outbound call plan {plan['plan_id']} ({plan['masked_number']})",
+    )
+    return {
+        'ok': True,
+        'plan': plan,
+        'phone': _load_phone_dashboard_state(directory, settings, now, eff_tz or 'UTC'),
+    }
+
+
+@_register_route('post', '/phone/calls/{call_id}/cancel')
+def cancel_phone_call(call_id: str, payload: dict | None = None):
+    if _phone is None:
+        raise HTTPException(status_code=503, detail='Phone store unavailable')
+    body = payload or {}
+    reason = str(body.get('reason') or 'Cancelled in Control Center').strip()
+    directory = Path(plugin_data_dir('butler'))
+    settings, _live_cfg, _sys_tz, eff_tz, _eff_src, _raw_cfg = _resolve_context(directory)
+    now = _now()
+    ps = _phone.PhoneStore(directory)
+    try:
+        call = ps.cancel_call(call_id, reason=reason, now=now)
+    except Exception as exc:
+        if isinstance(exc, HTTPException):
+            raise
+        _raise_phone_http_error(exc)
+    _record_phone_audit(
+        directory, now, 'phone_call_cancelled', 'ok',
+        f"Cancelled phone call {call['call_id']} ({call['masked_number']})",
+    )
+    return {
+        'ok': True,
+        'call': call,
+        'phone': _load_phone_dashboard_state(directory, settings, now, eff_tz or 'UTC'),
+    }
+
+
+@_register_route('post', '/phone/kill-switch')
+def set_phone_kill_switch(payload: dict | None = None):
+    if _phone is None:
+        raise HTTPException(status_code=503, detail='Phone store unavailable')
+    body = payload or {}
+    action = str(body.get('action') or '').strip().lower()
+    if action in ('stop', 'engage', 'halt'):
+        stopped = True
+    elif action in ('resume', 'clear'):
+        stopped = False
+    elif isinstance(body.get('stopped'), bool):
+        stopped = bool(body['stopped'])
+    else:
+        raise HTTPException(
+            status_code=422,
+            detail={'code': 'invalid_kill_switch_action', 'message': "Specify action='stop' or action='resume'"},
+        )
+    default_reason = 'Stopped in Control Center' if stopped else ''
+    reason = str(body.get('reason') or default_reason).strip()
+    directory = Path(plugin_data_dir('butler'))
+    settings, _live_cfg, _sys_tz, eff_tz, _eff_src, _raw_cfg = _resolve_context(directory)
+    now = _now()
+    ps = _phone.PhoneStore(directory)
+    info = ps.set_phone_stopped(stopped, reason=reason, now=now)
+    _record_phone_audit(
+        directory, now, 'phone_kill_switch', 'stopped' if stopped else 'resumed',
+        f"Phone kill-switch {'engaged' if stopped else 'cleared'}" + (f': {reason}' if reason and stopped else ''),
+    )
+    return {
+        'ok': True,
+        'kill_switch': info,
+        'phone': _load_phone_dashboard_state(directory, settings, now, eff_tz or 'UTC'),
+    }

@@ -271,6 +271,7 @@ def _render_responsibilities_block(
     zone: str,
     persistence: str,
     engagement: dict | None = None,
+    phone_status: dict | None = None,
 ) -> list[str]:
     today_str = local_dt.strftime('%Y-%m-%d')
     done_today: list[str] = []
@@ -376,6 +377,7 @@ def build_lifetime_awareness_context(
     system_timezone: str | None = None,
     active_responsibilities: list[dict] | None = None,
     engagement: dict | None = None,
+    phone_status: dict | None = None,
 ) -> str | None:
     """Render per-turn live local time, session lifetime, and notification/style posture."""
     if not isinstance(settings, dict):
@@ -457,4 +459,57 @@ def build_lifetime_awareness_context(
                 engagement=engagement,
             )
         )
+    if isinstance(phone_status, dict):
+        lines.extend(_render_phone_block(phone_status))
     return '\n'.join(lines)
+
+
+def _render_phone_block(phone_status: dict) -> list[str]:
+    out = ['[Butler Phone Calling]']
+    enabled = bool(phone_status.get('phone_enabled'))
+    stopped = bool(phone_status.get('phone_stopped'))
+    creds_ready = bool(phone_status.get('credentials_ready'))
+    owner_ring_on = bool(phone_status.get('owner_ring_enabled'))
+    owner_masked = str(phone_status.get('owner_phone_masked') or 'unset')
+    rings_hr = int(phone_status.get('rings_last_hour') or 0)
+    max_rings = int(phone_status.get('max_rings_per_hour') or 3)
+    ring_pol = phone_status.get('owner_ring_policy') or {}
+    ring_ready = 'allowed' if ring_pol.get('allowed') else str(ring_pol.get('reason') or 'disabled')
+
+    posture = (
+        f'Posture: phone_enabled={enabled}, credentials_ready={creds_ready}, '
+        f'owner_ring={owner_ring_on} (target={owner_masked}, policy={ring_ready}, rings_1h={rings_hr}/{max_rings}), '
+        f'kill_switch_stopped={stopped}.'
+    )
+    out.append(posture)
+    if stopped:
+        reason = str(phone_status.get('phone_stopped_reason') or 'halted by owner')
+        out.append(
+            f'PHONE KILL SWITCH ACTIVE ({reason}): all phone rings and outbound calls are blocked until the owner resumes calling in Butler Control Center or via `python -m butler.phone resume`.'
+        )
+    active = phone_status.get('active_call')
+    if isinstance(active, dict):
+        out.append(
+            f"Active call: {active.get('call_id')} ({active.get('direction')}, {active.get('masked_number')}, status={active.get('status')})."
+        )
+    pending = phone_status.get('pending_plans') or []
+    for p in pending[:5]:
+        if isinstance(p, dict):
+            out.append(
+                f"Pending human approval: {p.get('plan_id')} -> {p.get('recipient_label') or 'Recipient'} ({p.get('masked_number')}): {p.get('objective')} [owner must approve in Butler Control Center or `python -m butler.phone approve {p.get('plan_id')}` before place_call]."
+            )
+    approved = phone_status.get('approved_plans') or []
+    for p in approved[:5]:
+        if isinstance(p, dict):
+            out.append(
+                f"Approved & ready to place: {p.get('plan_id')} -> {p.get('recipient_label') or 'Recipient'} ({p.get('masked_number')}): {p.get('objective')} [call butler_phone(action='place_call', plan_id='{p.get('plan_id')}') when ready]."
+            )
+    recent = phone_status.get('recent_calls') or []
+    finished = [c for c in recent if isinstance(c, dict) and c.get('status') not in ('dispatching', 'ringing', 'in_progress')]
+    for c in finished[:2]:
+        summary = str(c.get('outcome_summary') or '').strip()
+        suffix = f' — {summary}' if summary else ''
+        out.append(
+            f"Recent call: {c.get('call_id')} ({c.get('direction')}, {c.get('masked_number')}, status={c.get('status')}){suffix}"
+        )
+    return out

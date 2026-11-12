@@ -374,7 +374,10 @@ function Page({ ctx }) {
     allow_gateway_injection: false,
     plugin_enabled: true,
     hermes_live_config: null,
+    phone: null,
   });
+
+  const [expandedCallId, setExpandedCallId] = useState(null);
 
   const [quickTitle, setQuickTitle] = useState('');
   const [itemFilter, setItemFilter] = useState('all');
@@ -437,6 +440,7 @@ function Page({ ctx }) {
       allow_gateway_injection: Boolean(data.allow_gateway_injection),
       plugin_enabled: data.plugin_enabled !== false,
       hermes_live_config: data.hermes_live_config || null,
+      phone: data.phone || null,
     });
   };
 
@@ -839,6 +843,80 @@ function Page({ ctx }) {
     }
   };
 
+  const handleApprovePhonePlan = async (plan) => {
+    if (!plan || !plan.plan_id) return;
+    setBusy(true);
+    setError('');
+    setMessage('');
+    try {
+      await restCall(ctx, 'POST', `/phone/plans/${encodeURIComponent(plan.plan_id)}/approve`, {
+        sha256: plan.script_sha256 || '',
+      });
+      await refreshState(() => true, true);
+      setMessage(`Approved outbound call plan for ${plan.recipient_label || 'recipient'} (${plan.masked_number || 'masked'}).`);
+    } catch (err) {
+      setError((err && err.message) || 'Could not approve call plan.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleRejectPhonePlan = async (plan) => {
+    if (!plan || !plan.plan_id) return;
+    setBusy(true);
+    setError('');
+    setMessage('');
+    try {
+      await restCall(ctx, 'POST', `/phone/plans/${encodeURIComponent(plan.plan_id)}/reject`, {
+        reason: 'Rejected in Desktop Control Center',
+      });
+      await refreshState(() => true, true);
+      setMessage(`Rejected call plan for ${plan.recipient_label || 'recipient'}.`);
+    } catch (err) {
+      setError((err && err.message) || 'Could not reject call plan.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleCancelPhoneCall = async (call) => {
+    if (!call || !call.call_id) return;
+    setBusy(true);
+    setError('');
+    setMessage('');
+    try {
+      await restCall(ctx, 'POST', `/phone/calls/${encodeURIComponent(call.call_id)}/cancel`, {
+        reason: 'Cancelled in Desktop Control Center',
+      });
+      await refreshState(() => true, true);
+      setMessage(`Cancelled call ${call.masked_number || call.call_id}.`);
+    } catch (err) {
+      setError((err && err.message) || 'Could not cancel call.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleSetPhoneKillSwitch = async (stopped) => {
+    setBusy(true);
+    setError('');
+    setMessage('');
+    try {
+      await restCall(ctx, 'POST', '/phone/kill-switch', {
+        action: stopped ? 'stop' : 'resume',
+        reason: stopped ? 'Stopped in Desktop Control Center' : '',
+      });
+      await refreshState(() => true, true);
+      setMessage(stopped
+        ? 'Phone kill-switch engaged: all active and future calls are halted until you resume.'
+        : 'Phone kill-switch cleared: phone calling may resume within your preferences.');
+    } catch (err) {
+      setError((err && err.message) || 'Could not update phone kill-switch.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
   // Derived status & metrics
   const effTz = stateData.effective_timezone || (prefs && prefs.timezone) || stateData.detected_system_timezone || 'UTC';
   const quota = stateData.quota || {};
@@ -1148,8 +1226,16 @@ function Page({ ctx }) {
     });
 
     const handsRows = [];
+    const phoneState = stateData.phone || null;
+    const pendingPlans = (phoneState && Array.isArray(phoneState.pending_plans)) ? phoneState.pending_plans : [];
+    const activePhoneCall = phoneState ? phoneState.active_call : null;
     if (prefs && prefs.paused) {
       handsRows.push(Row('◌', 'Check-ins are paused', 'Nothing will be sent until you resume.', 'Paused', { key: 'paused', onClick: togglePaused }));
+    }
+    if (phoneState && phoneState.phone_stopped) {
+      handsRows.push(Row('◌', 'Phone calling is halted', phoneState.phone_stopped_reason || 'Kill-switch is active until you resume.', 'Halted', { key: 'phone-halted', onClick: () => handleSetPhoneKillSwitch(false) }));
+    } else if (pendingPlans.length > 0) {
+      handsRows.push(Row('✦', `${pendingPlans.length} outbound call${pendingPlans.length > 1 ? 's' : ''} awaiting approval`, 'Butler never dials third-party numbers without your explicit sign-off.', 'Approve', { key: 'phone-pending', onClick: () => goTab('activity') }));
     }
     if (setupNeeded) {
       handsRows.push(Row('✦', 'Finish setting up your assistant', 'Choose your pace and quiet hours, and turn on background check-ins.', 'Setup', { key: 'setup', onClick: openQuickSetup }));
@@ -1168,6 +1254,72 @@ function Page({ ctx }) {
       : Row('❧', 'Nothing urgent', 'There are no decisions waiting for you.', 'All clear', { key: 'ok' }));
 
     return h('div', { className: 'ovc-content' },
+      phoneState && phoneState.phone_stopped && h('section', {
+        className: 'ovc-panel',
+        style: { borderColor: 'color-mix(in srgb, #d9534f 45%, var(--border, #666))', marginBottom: 16 },
+      },
+        h('div', { className: 'ovc-panelhead' },
+          h('h3', null, 'Phone kill-switch engaged'),
+          Btn('Resume phone calling', () => handleSetPhoneKillSwitch(false), 'small'),
+        ),
+        h('p', { className: 'ovc-muted' },
+          phoneState.phone_stopped_reason
+            ? `All Butler phone calls are halted (${phoneState.phone_stopped_reason}). Only you can clear this latch.`
+            : 'All Butler phone calls are halted until you explicitly resume.',
+        ),
+      ),
+      (pendingPlans.length > 0 || activePhoneCall) && h('section', { className: 'ovc-panel', style: { marginBottom: 16 } },
+        h('div', { className: 'ovc-panelhead' },
+          h('h3', null, 'Phone approvals & active line'),
+          Link('Call log', () => goTab('activity')),
+        ),
+        activePhoneCall && h('div', {
+          style: {
+            padding: '10px 12px',
+            borderRadius: 10,
+            border: '1px solid var(--border, rgba(127, 127, 127, 0.22))',
+            marginBottom: pendingPlans.length ? 10 : 0,
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            gap: 10,
+            flexWrap: 'wrap',
+          },
+        },
+          h('div', { style: { flex: 1, minWidth: 200 } },
+            h('strong', { style: { display: 'block', fontSize: 13.5 } },
+              `Live ${activePhoneCall.direction === 'owner_ring' ? 'owner escalation' : activePhoneCall.direction} · ${activePhoneCall.masked_number || 'masked'}`,
+            ),
+            h('span', { style: { fontSize: 12, color: 'var(--muted-foreground, #6e776f)' } },
+              `${activePhoneCall.status} · ${activePhoneCall.reason || activePhoneCall.recipient_label || ''}`,
+            ),
+          ),
+          Btn('Cancel call', () => handleCancelPhoneCall(activePhoneCall), 'small ghost'),
+        ),
+        pendingPlans.map((plan) => h('div', {
+          key: plan.plan_id,
+          style: {
+            padding: '11px 12px',
+            borderRadius: 10,
+            border: '1px solid var(--border, rgba(127, 127, 127, 0.2))',
+            marginBottom: 8,
+          },
+        },
+          h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10, flexWrap: 'wrap' } },
+            h('div', { style: { flex: 1, minWidth: 220 } },
+              h('strong', { style: { fontSize: 14 } }, `${plan.recipient_label || 'Outbound call'} · ${plan.masked_number || ''}`),
+              h('p', { style: { margin: '4px 0', fontSize: 12.5 } }, plan.objective || ''),
+              h('p', { style: { margin: '2px 0 0', fontSize: 11.5, color: 'var(--muted-foreground, #6e776f)' } },
+                `AI disclosure: "${plan.ai_disclosure_opening || ''}" · sha256:${String(plan.script_sha256 || '').slice(0, 12)}`,
+              ),
+            ),
+            h('div', { style: { display: 'flex', gap: 6, flexWrap: 'wrap' } },
+              Btn('Approve call', () => handleApprovePhonePlan(plan), 'small'),
+              Btn('Reject', () => handleRejectPhonePlan(plan), 'small ghost'),
+            ),
+          ),
+        )),
+      ),
       // Daily non-negotiables
       h('section', { className: 'ovc-essentials' },
         h('div', { className: 'ovc-essentials-head' },
@@ -1298,17 +1450,101 @@ function Page({ ctx }) {
     );
   };
 
-  const renderActivityTab = () => h('div', { className: 'ovc-content' },
-    h('section', { className: 'ovc-panel' },
-      h('div', { className: 'ovc-panelhead' },
-        h('h3', null, 'Activity'),
-        Btn('Refresh', () => refreshState(() => true, true), 'small ghost'),
+  const renderActivityTab = () => {
+    const phone = stateData.phone || null;
+    const recentCalls = (phone && Array.isArray(phone.recent_calls)) ? phone.recent_calls : [];
+    const pending = (phone && Array.isArray(phone.pending_plans)) ? phone.pending_plans : [];
+    const showPhoneCard = Boolean(phone && (phone.phone_enabled || phone.phone_stopped || recentCalls.length || pending.length));
+    return h('div', { className: 'ovc-content' },
+      showPhoneCard && h('section', { className: 'ovc-panel', style: { marginBottom: 16 } },
+        h('div', { className: 'ovc-panelhead' },
+          h('h3', null, 'Phone calls & transcripts'),
+          h('div', { style: { display: 'flex', gap: 8, flexWrap: 'wrap' } },
+            phone.phone_stopped
+              ? Btn('Resume phone calling', () => handleSetPhoneKillSwitch(false), 'small')
+              : Btn('Stop all calls', () => handleSetPhoneKillSwitch(true), 'small ghost'),
+          ),
+        ),
+        phone.phone_stopped && h('p', { className: 'ovc-muted', style: { marginBottom: 10 } },
+          `Kill-switch active${phone.phone_stopped_reason ? `: ${phone.phone_stopped_reason}` : ''}.`,
+        ),
+        pending.map((plan) => h('div', {
+          key: plan.plan_id,
+          style: {
+            padding: '10px 12px',
+            borderRadius: 9,
+            border: '1px solid var(--border, rgba(127, 127, 127, 0.2))',
+            marginBottom: 8,
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            gap: 10,
+            flexWrap: 'wrap',
+          },
+        },
+          h('div', { style: { flex: 1, minWidth: 200 } },
+            h('strong', { style: { display: 'block', fontSize: 13.5 } }, `Pending approval · ${plan.recipient_label} (${plan.masked_number})`),
+            h('span', { style: { fontSize: 12, color: 'var(--muted-foreground, #6e776f)' } }, `${plan.objective} · sha256:${String(plan.script_sha256 || '').slice(0, 12)}`),
+          ),
+          h('div', { style: { display: 'flex', gap: 6 } },
+            Btn('Approve', () => handleApprovePhonePlan(plan), 'small'),
+            Btn('Reject', () => handleRejectPhonePlan(plan), 'small ghost'),
+          ),
+        )),
+        recentCalls.length
+          ? recentCalls.map((call) => {
+              const isExpanded = expandedCallId === call.call_id;
+              const transcript = Array.isArray(call.transcript) ? call.transcript : [];
+              const isActive = ['dispatching', 'ringing', 'in_progress'].includes(call.status);
+              const dirLabel = call.direction === 'owner_ring' ? 'Owner escalation' : (call.direction === 'inbound' ? 'Inbound screening' : 'Outbound call');
+              return h('div', {
+                key: call.call_id,
+                style: {
+                  padding: '10px 12px',
+                  borderRadius: 9,
+                  border: '1px solid var(--border, rgba(127, 127, 127, 0.16))',
+                  marginBottom: 8,
+                },
+              },
+                h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10, flexWrap: 'wrap' } },
+                  h('div', { style: { flex: 1, minWidth: 200 } },
+                    h('strong', { style: { fontSize: 13.5 } }, `${dirLabel} · ${call.recipient_label || 'Owner'} (${call.masked_number || 'masked'})`),
+                    h('p', { style: { margin: '3px 0 0', fontSize: 12, color: 'var(--muted-foreground, #6e776f)' } },
+                      `${call.status}${call.duration_seconds ? ` · ${call.duration_seconds}s` : ''} · ${formatDateTime(call.created_at, effTz)}${call.outcome_summary ? ` — ${call.outcome_summary}` : (call.reason ? ` — ${call.reason}` : '')}`,
+                    ),
+                  ),
+                  h('div', { style: { display: 'flex', gap: 6 } },
+                    isActive && Btn('Cancel', () => handleCancelPhoneCall(call), 'small ghost'),
+                    transcript.length > 0 && Btn(isExpanded ? 'Hide transcript' : `Transcript (${transcript.length})`, () => setExpandedCallId(isExpanded ? null : call.call_id), 'small ghost'),
+                  ),
+                ),
+                isExpanded && transcript.length > 0 && h('div', {
+                  style: {
+                    marginTop: 8,
+                    padding: '8px 10px',
+                    borderRadius: 8,
+                    background: 'color-mix(in srgb, var(--foreground, #888) 4%, transparent)',
+                    fontSize: 12,
+                  },
+                }, transcript.map((line, i) => h('div', { key: `${call.call_id}-t-${i}`, style: { marginBottom: 4 } },
+                  h('strong', null, `${line.speaker || 'speaker'}: `),
+                  h('span', null, line.text || ''),
+                ))),
+              );
+            })
+          : (!pending.length && h('p', { className: 'ovc-muted' }, 'No phone calls placed yet.')),
       ),
-      stateData.recent_activity.length
-        ? renderActivityRows(200)
-        : h('p', { className: 'ovc-muted' }, 'No activity logged yet. Check-ins, completions, daily resets and schedule changes appear here.'),
-    ),
-  );
+      h('section', { className: 'ovc-panel' },
+        h('div', { className: 'ovc-panelhead' },
+          h('h3', null, 'Activity'),
+          Btn('Refresh', () => refreshState(() => true, true), 'small ghost'),
+        ),
+        stateData.recent_activity.length
+          ? renderActivityRows(200)
+          : h('p', { className: 'ovc-muted' }, 'No activity logged yet. Check-ins, completions, daily resets and schedule changes appear here.'),
+      ),
+    );
+  };
 
   // Tab 2: Non-Negotiables & Commitments
   const renderItemsTab = () => {
@@ -1780,7 +2016,129 @@ function Page({ ctx }) {
         }, `Live Hermes config: warnings_muted=${String(stateData.hermes_live_config.suppress_warning_notifications)}, tool_progress=${stateData.hermes_live_config.tool_progress}, interim=${String(stateData.hermes_live_config.interim_assistant_messages)}, skill_nudge_interval=${stateData.hermes_live_config.skill_creation_nudge_interval}, gateway_timestamps=${String(stateData.hermes_live_config.gateway_message_timestamps)}.`),
       ),
 
-      // Section 4: Privacy & Capture Gates
+      // Section 4: Phone Calling & Voice Escalation (LiveKit SIP)
+      h('section', { style: styles.card },
+        h('div', { style: styles.cardHeader },
+          h('div', null,
+            h('h2', { style: styles.cardTitle }, 'Phone Calling & Voice Escalation (LiveKit SIP)'),
+            h('p', { style: styles.cardHint },
+              'Opt-in LiveKit SIP voice calling for urgent owner phone rings, approve-first outbound calls, and optional inbound call screening. Butler never dials third-party numbers without human approval.',
+            ),
+          ),
+          stateData.phone && (stateData.phone.phone_stopped
+            ? h('button', { type: 'button', disabled: busy, style: styles.btn('sage', busy), onClick: () => handleSetPhoneKillSwitch(false) }, 'Resume Phone Calling')
+            : h('button', { type: 'button', disabled: busy, style: styles.btn('mini', busy), onClick: () => handleSetPhoneKillSwitch(true) }, 'Stop All Calls')),
+        ),
+
+        stateData.phone && h('div', {
+          style: {
+            padding: '9px 12px',
+            borderRadius: 9,
+            marginBottom: 10,
+            background: stateData.phone.phone_stopped
+              ? 'color-mix(in srgb, #d9534f 14%, transparent)'
+              : (stateData.phone.credentials_ready
+                ? 'color-mix(in srgb, #459457 11%, transparent)'
+                : 'color-mix(in srgb, #c8872b 13%, transparent)'),
+            fontSize: 12.5,
+          },
+        },
+          stateData.phone.phone_stopped
+            ? `Kill-switch active${stateData.phone.phone_stopped_reason ? ` (${stateData.phone.phone_stopped_reason})` : ''}. Click Resume Phone Calling above to clear.`
+            : (stateData.phone.credentials_ready
+              ? `LiveKit credentials ready · Owner rings last hour: ${stateData.phone.rings_last_hour || 0}/${prefs.maxRingsPerHour || 3}${stateData.phone.owner_phone_masked ? ` · Owner line: ${stateData.phone.owner_phone_masked}` : ''}.`
+              : `Missing LiveKit secrets in Hermes config/env: ${(stateData.phone.missing_env || []).join(', ') || 'LIVEKIT_URL, LIVEKIT_API_KEY, LIVEKIT_API_SECRET'}. Also start python -m butler.voice_worker start for live audio.`),
+        ),
+
+        toggleRow(
+          'Enable LiveKit SIP phone calling',
+          'phoneEnabled',
+          'Master switch for all Butler telephony features. Only editable here by you (never by the model).',
+        ),
+        toggleRow(
+          'Allow proactive owner phone escalation (ring my phone)',
+          'ownerRingEnabled',
+          'Lets Butler ring your phone via LiveKit SIP when high-stakes follow-ups go unanswered, bounded by your hourly cap and cooldown.',
+        ),
+        toggleRow(
+          'Allow urgent owner rings to break through Quiet Hours',
+          'quietHoursBreakthrough',
+          'Off by default. When enabled, explicitly urgent owner escalations may ring during Quiet Hours.',
+        ),
+        toggleRow(
+          'Enable inbound call screening & callback linking',
+          'inboundScreeningEnabled',
+          'Screens inbound SIP calls to your LiveKit number and links callbacks to recent outbound plans.',
+        ),
+
+        h('div', {
+          style: {
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))',
+            gap: 12,
+            marginTop: 10,
+            paddingTop: 10,
+            borderTop: '1px solid var(--border, rgba(127, 127, 127, 0.16))',
+          },
+        },
+          h('div', null,
+            h('label', { style: { display: 'block', fontSize: 12.5, fontWeight: 560, marginBottom: 5 } }, 'Owner phone number (E.164)'),
+            h('input', {
+              type: 'tel',
+              placeholder: '+14155550123',
+              value: prefs.ownerPhone || '',
+              onChange: (e) => updatePref('ownerPhone', e.target.value),
+              style: styles.input,
+            }),
+          ),
+          h('div', null,
+            h('label', { style: { display: 'block', fontSize: 12.5, fontWeight: 560, marginBottom: 5 } }, 'Spoken caller name (AI disclosure)'),
+            h('input', {
+              type: 'text',
+              placeholder: 'Butler',
+              value: prefs.callerName || '',
+              onChange: (e) => updatePref('callerName', e.target.value),
+              style: styles.input,
+            }),
+          ),
+          h('div', null,
+            h('label', { style: { display: 'block', fontSize: 12.5, fontWeight: 560, marginBottom: 5 } }, 'Max owner rings per hour (1–20)'),
+            h('input', {
+              type: 'number',
+              min: 1,
+              max: 20,
+              step: 1,
+              value: prefs.maxRingsPerHour ?? 3,
+              onChange: (e) => updatePref('maxRingsPerHour', e.target.value === '' ? 3 : Number(e.target.value)),
+              style: styles.input,
+            }),
+          ),
+          h('div', null,
+            h('label', { style: { display: 'block', fontSize: 12.5, fontWeight: 560, marginBottom: 5 } }, 'Minimum cooldown between rings (seconds)'),
+            h('input', {
+              type: 'number',
+              min: 30,
+              max: 86400,
+              step: 10,
+              value: prefs.minRingGapSeconds ?? 120,
+              onChange: (e) => updatePref('minRingGapSeconds', e.target.value === '' ? 120 : Number(e.target.value)),
+              style: styles.input,
+            }),
+          ),
+          h('div', null,
+            h('label', { style: { display: 'block', fontSize: 12.5, fontWeight: 560, marginBottom: 5 } }, 'LiveKit voice worker agent name'),
+            h('input', {
+              type: 'text',
+              placeholder: 'butler-voice',
+              value: prefs.livekitAgentName || '',
+              onChange: (e) => updatePref('livekitAgentName', e.target.value),
+              style: styles.input,
+            }),
+          ),
+        ),
+      ),
+
+      // Section 5: Privacy & Capture Gates
       h('section', { style: styles.card },
         h('h2', { style: { ...styles.cardTitle, marginBottom: 6 } }, 'Privacy & Event Capture Gates'),
         h('p', { style: { margin: '0 0 10px', fontSize: 12.5, color: 'var(--muted-foreground, #6e776f)' } },

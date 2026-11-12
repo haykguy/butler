@@ -280,3 +280,24 @@ def test_model_can_close_pause_stop_and_store_followup_note_on_submitted_item(tm
     assert not store.snooze(item2['id'], NOW + timedelta(hours=1), notes='must not persist on a closed item')
     assert store.get(item2['id'])['metadata'].get('notes') != 'must not persist on a closed item'
     store.close()
+
+
+def test_public_repo_sanitized_no_private_hosts_or_ios_app():
+    root = Path(__file__).resolve().parents[1]
+    targets = [
+        root / 'README.md',
+        root / 'plugin.yaml',
+        root / 'pyproject.toml',
+        root / '__init__.py',
+        *sorted((root / 'butler').glob('*.py')),
+        *sorted((root / 'dashboard').glob('*.py')),
+        *sorted((root / 'desktop').glob('*.js')),
+        *sorted((root / 'skills').rglob('*.md')),
+    ]
+    forbidden = ('Hayk', 'haykguy/', 'Mecha', 'desklinux', '192.168.', 'HermesCall', '/Users/')
+    for path in targets:
+        text = path.read_text(encoding='utf-8')
+        for token in forbidden:
+            if token == 'haykguy/' and path.name in ('README.md', 'plugin.yaml', 'pyproject.toml'):
+                continue
+            assert token not in text, f'{token!r} leaked in {path.relative_to(root)}'
