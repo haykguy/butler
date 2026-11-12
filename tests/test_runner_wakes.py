@@ -693,7 +693,7 @@ def test_plugin_entrypoint_active_runner_lifecycle(tmp_path, monkeypatch):
         spec.loader.exec_module(module)
         ctx = FakeHostContext()
         module.register(ctx)
-        assert set(ctx.tools) == {'butler_create', 'butler_manage', 'butler_expression', 'butler_controls', 'butler_imessage'}
+        assert set(ctx.tools) == {'butler_create', 'butler_manage', 'butler_expression', 'butler_controls', 'butler_imessage', 'butler_phone'}
         assert len(ctx.hooks['post_gateway_admission']) == 2
         assert len(ctx.hooks['pre_llm_call']) == 2
 

@@ -216,6 +216,54 @@ class Policy:
             'reason': ev['reason'],
         }
 
+    def evaluate_owner_ring(
+        self, now: datetime, *, urgent: bool = False, fallback_timezone: str = ''
+    ) -> dict:
+        """Evaluate policy-level gates (pause + quiet hours / breakthrough) for an owner phone ring."""
+        if not _is_aware_datetime(now):
+            return {'allowed': False, 'reason': 'invalid_now', 'in_quiet_hours': False, 'quiet_until': None}
+        try:
+            settings = load(self.directory)
+            if settings['paused']:
+                return {'allowed': False, 'reason': 'paused', 'in_quiet_hours': False, 'quiet_until': None}
+            if not settings.get('phoneEnabled') or not settings.get('ownerRingEnabled'):
+                return {'allowed': False, 'reason': 'owner_ring_disabled', 'in_quiet_hours': False, 'quiet_until': None}
+            tz_name = str(settings['timezone'] or fallback_timezone)
+            if settings['quietEnabled'] and not tz_name:
+                return {'allowed': False, 'reason': 'timezone_required', 'in_quiet_hours': False, 'quiet_until': None}
+            tz = _resolve_zone(tz_name) if tz_name else ZoneInfo('UTC')
+            quiet_end = _quiet_end_for_settings(settings, now, tz)
+            if quiet_end is not None:
+                if urgent and settings.get('quietHoursBreakthrough'):
+                    return {
+                        'allowed': True,
+                        'reason': 'quiet_hours_breakthrough',
+                        'in_quiet_hours': True,
+                        'quiet_until': quiet_end.isoformat(),
+                    }
+                return {
+                    'allowed': False,
+                    'reason': 'quiet_hours',
+                    'in_quiet_hours': True,
+                    'quiet_until': quiet_end.isoformat(),
+                }
+            return {'allowed': True, 'reason': 'ok', 'in_quiet_hours': False, 'quiet_until': None}
+        except (OSError, ValueError, TypeError):
+            return {'allowed': False, 'reason': 'invalid_configuration', 'in_quiet_hours': False, 'quiet_until': None}
+
+    def release_wake(self, now, *, fallback_timezone: str = '') -> None:
+        """Refund one reserved wake whose delivery the host refused (it never reached the owner)."""
+        try:
+            settings = load(self.directory)
+            tz_name = settings['timezone'] or fallback_timezone
+            tz = _resolve_zone(tz_name) if tz_name else ZoneInfo('UTC')
+            day = now.astimezone(tz).date().isoformat()
+            with closing(sqlite3.connect(self.directory / 'policy.sqlite3', timeout=30, isolation_level=None)) as db:
+                db.execute('CREATE TABLE IF NOT EXISTS wake_attempts (day TEXT PRIMARY KEY, count INTEGER NOT NULL)')
+                db.execute('UPDATE wake_attempts SET count=count-1 WHERE day=? AND count>0', (day,))
+        except (OSError, ValueError, TypeError, sqlite3.Error):
+            pass
+
     def reserve_wake(self, now, *, fallback_timezone: str = ''):
         """Reserve one wake attempt atomically across processes, or deny it."""
         try:

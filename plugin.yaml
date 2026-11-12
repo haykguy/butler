@@ -1,5 +1,5 @@
 name: butler
-version: 0.4.0
+version: 0.5.0
 description: "Butler — the proactive personal assistant for Hermes Agent. Messages you first, tracks commitments and daily non-negotiables, follows up on timing the model chooses itself (no fixed cadence), with live local-time awareness and privacy-first guardrails."
 author: Butler contributors
 kind: standalone
@@ -14,8 +14,28 @@ provides_tools:
   - butler_manage
   - butler_expression
   - butler_imessage
+  - butler_phone
   - butler_controls
 provides_hooks:
   - post_gateway_admission
   - pre_llm_call
   - post_llm_call
+requires_env:
+  - name: LIVEKIT_URL
+    required: false
+    description: Optional LiveKit Server URL (wss://... or https://...) for LiveKit SIP phone calling and owner ring escalation.
+  - name: LIVEKIT_API_KEY
+    required: false
+    description: Optional LiveKit API key used to mint short-lived HS256 dispatch/SIP tokens.
+  - name: LIVEKIT_API_SECRET
+    required: false
+    description: Optional LiveKit API secret used to sign short-lived HS256 dispatch/SIP tokens.
+  - name: LIVEKIT_SIP_TRUNK_ID
+    required: false
+    description: Optional LiveKit outbound SIP trunk ID used by butler.voice_worker CreateSIPParticipant.
+  - name: LIVEKIT_CALLER_NUMBER
+    required: false
+    description: Optional outbound caller ID E.164 phone number associated with your LiveKit SIP trunk.
+  - name: OPENAI_API_KEY
+    required: false
+    description: Optional OpenAI API key used only when running the optional `python -m butler.voice_worker start` realtime STT/LLM/TTS voice worker.

@@ -134,6 +134,104 @@ class ToolTests(unittest.TestCase):
         self.assertIn('error', json.loads(ctx.tools['butler_create']['handler']({'title': 'x', 'due_at': '2026-01-01T09:00:00'})))
         self.assertEqual(store.items, [])
 
+    def test_phone_tool_double_gate_and_owner_ring(self):
+        from datetime import datetime, timezone
+        from pathlib import Path
+        from tempfile import TemporaryDirectory
+        from butler.phone import PhoneStore
+        from butler.phone_tools import register_phone_tools
+        from butler.settings import defaults as settings_defaults, save as save_settings
+
+        now = datetime(2026, 11, 11, 16, 0, 0, tzinfo=timezone.utc)
+        fake_env = {
+            'LIVEKIT_URL': 'wss://example.livekit.cloud',
+            'LIVEKIT_API_KEY': 'APIkeyTest',
+            'LIVEKIT_API_SECRET': 'secretTestValue1234567890',
+            'LIVEKIT_SIP_TRUNK_ID': 'ST_test123',
+            'LIVEKIT_CALLER_NUMBER': '+14155550100',
+        }
+        dispatched = []
+
+        def fake_dispatch(**kwargs):
+            dispatched.append(kwargs)
+            return {'id': f'disp_{len(dispatched)}'}
+
+        with TemporaryDirectory(dir=Path(__file__).parent) as directory:
+            prof = Path(directory)
+            cfg = settings_defaults()
+            cfg.update({
+                'timezone': 'America/Chicago',
+                'phoneEnabled': True,
+                'ownerRingEnabled': True,
+                'ownerPhone': '+14155550123',
+            })
+            save_settings(prof, cfg)
+            ctx = FakeContext()
+            register_phone_tools(
+                ctx,
+                directory=lambda: prof,
+                now_fn=lambda: now,
+                system_tz_fn=lambda: 'America/Chicago',
+                env_override=fake_env,
+                dispatch_fn=fake_dispatch,
+            )
+            handler = ctx.tools['butler_phone']['handler']
+
+            # LLM cannot self-approve
+            denied = json.loads(handler({'action': 'approve', 'plan_id': 'plan_x'}))
+            self.assertFalse(denied['ok'])
+            self.assertEqual(denied['error'], 'human_approval_only')
+
+            # Draft outbound call -> pending_approval with masked number
+            drafted = json.loads(handler({
+                'action': 'draft_call',
+                'to_number': '+14155550199',
+                'recipient_label': 'Clinic Desk',
+                'objective': 'Confirm Thursday 3pm appointment',
+            }))
+            self.assertTrue(drafted['ok'])
+            plan_id = drafted['plan']['plan_id']
+            self.assertEqual(drafted['plan']['status'], 'pending_approval')
+            self.assertNotIn('+14155550199', json.dumps(drafted))
+
+            # Placing before human approval is blocked
+            unapproved = json.loads(handler({'action': 'place_call', 'plan_id': plan_id}))
+            self.assertFalse(unapproved['ok'])
+            self.assertEqual(unapproved['error'], 'approval_required')
+
+            # Human approves via PhoneStore -> place_call succeeds
+            PhoneStore(prof).approve_plan(plan_id, approved_by='human_ui', now=now)
+            placed = json.loads(handler({'action': 'place_call', 'plan_id': plan_id}))
+            self.assertTrue(placed['ok'])
+            call_id = placed['call']['call_id']
+            self.assertEqual(placed['call']['status'], 'dispatching')
+
+            # Cancel active call releases single-active-call lock
+            cancelled = json.loads(handler({'action': 'cancel_call', 'call_id': call_id, 'reason': 'Test cancel'}))
+            self.assertTrue(cancelled['ok'])
+            self.assertEqual(cancelled['call']['status'], 'cancelled')
+
+            # Owner ring dispatches when policy allows
+            rung = json.loads(handler({'action': 'ring_owner', 'reason': 'Flight boarding in 20 minutes'}))
+            self.assertTrue(rung['ok'])
+            self.assertEqual(rung['call']['direction'], 'owner_ring')
+
+            # Status and list_calls work
+            st = json.loads(handler({'action': 'call_status'}))
+            self.assertTrue(st['ok'])
+            self.assertEqual(st['status']['rings_last_hour'], 1)
+            listed = json.loads(handler({'action': 'list_calls', 'limit': 10}))
+            self.assertTrue(listed['ok'])
+            self.assertEqual(len(listed['calls']), 2)
+
+            # stop_escalation engages phone_stopped latch
+            halted = json.loads(handler({'action': 'stop_escalation', 'reason': 'Owner asked to stop'}))
+            self.assertTrue(halted['ok'])
+            self.assertTrue(halted['stopped'])
+            blocked = json.loads(handler({'action': 'ring_owner', 'reason': 'Another ping'}))
+            self.assertFalse(blocked['ok'])
+            self.assertEqual(blocked['error'], 'phone_stopped_kill_switch')
+
 
 if __name__ == '__main__':
     unittest.main()

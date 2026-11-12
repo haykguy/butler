@@ -1,10 +1,18 @@
 [project]
 name = "hermes-butler"
-version = "0.4.0"
+version = "0.5.0"
 description = "Proactive assistant controls for Hermes Agent: live local-time & session-lifetime awareness, system notification/load controls, durable responsibilities, and privacy-first guardrails."
 readme = "README.md"
 requires-python = ">=3.11"
 license = { file = "LICENSE" }
+
+[project.optional-dependencies]
+voice = [
+    "livekit>=1.0.0,<2.0.0",
+    "livekit-agents>=1.0.0,<2.0.0",
+    "livekit-plugins-openai>=1.0.0,<2.0.0",
+    "livekit-plugins-silero>=1.0.0,<2.0.0",
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
