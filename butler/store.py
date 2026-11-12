@@ -202,6 +202,8 @@ class ResponsibilityStore:
         if due_at is not _UNSET:
             assignments.append('due_at=?')
             params.append(stamp(due_at))
+            if due_at is not None:
+                assignments.append("status=CASE WHEN status IN ('submitted','queued') THEN 'active' ELSE status END")
         if timezone_name is not _UNSET:
             assignments.append('timezone=?')
             params.append(_normalize_timezone(timezone_name))
@@ -244,11 +246,11 @@ class ResponsibilityStore:
 
     def pause(self, item_id, *, notes=None):
         if notes is None:
-            return self._transition(item_id, 'paused', ('active', 'submitted'))
+            return self._transition(item_id, 'paused', ('active', 'queued', 'submitted'))
         self.db.execute('BEGIN IMMEDIATE')
         try:
             row = self.db.execute(
-                "SELECT metadata FROM responsibilities WHERE id=? AND status IN ('active','submitted')",
+                "SELECT metadata FROM responsibilities WHERE id=? AND status IN ('active','queued','submitted')",
                 (item_id,),
             ).fetchone()
             if row is None:
@@ -259,7 +261,7 @@ class ResponsibilityStore:
             result = self.db.execute(
                 """UPDATE responsibilities SET status='paused',
                    claim_token=NULL,claim_until=NULL,generation=generation+1,metadata=?
-                   WHERE id=? AND status IN ('active','submitted')""",
+                   WHERE id=? AND status IN ('active','queued','submitted')""",
                 (json.dumps(metadata), item_id),
             )
             self.db.execute('COMMIT')
@@ -273,16 +275,16 @@ class ResponsibilityStore:
         return self._transition(item_id, 'active', ('paused',))
 
     def stop(self, item_id):
-        return self._transition(item_id, 'stopped', ('active', 'paused', 'submitted'))
+        return self._transition(item_id, 'stopped', ('active', 'paused', 'queued', 'submitted'))
 
     def complete(self, item_id):
-        return self._transition(item_id, 'completed', ('active', 'paused', 'submitted'))
+        return self._transition(item_id, 'completed', ('active', 'paused', 'queued', 'submitted'))
 
     def snooze(self, item_id, until, *, notes=None):
         self.db.execute('BEGIN IMMEDIATE')
         try:
             row = self.db.execute(
-                "SELECT status,metadata FROM responsibilities WHERE id=? AND status IN ('active','paused','submitted')",
+                "SELECT status,metadata FROM responsibilities WHERE id=? AND status IN ('active','paused','queued','submitted')",
                 (item_id,),
             ).fetchone()
             if row is None:
@@ -296,7 +298,7 @@ class ResponsibilityStore:
             result = self.db.execute(
                 """UPDATE responsibilities SET due_at=?,status='active',
                    claim_token=NULL,claim_until=NULL,generation=generation+1,metadata=?
-                   WHERE id=? AND status IN ('active','paused','submitted')""",
+                   WHERE id=? AND status IN ('active','paused','queued','submitted')""",
                 (stamp(until), metadata_json, item_id),
             )
             self.db.execute('COMMIT')
@@ -307,7 +309,7 @@ class ResponsibilityStore:
             raise
 
     def reopen(self, item_id, *, due_at=None) -> bool:
-        allowed = ('completed', 'submitted', 'paused', 'stopped', 'active')
+        allowed = ('completed', 'submitted', 'queued', 'paused', 'stopped', 'active')
         placeholders = ','.join('?' for _ in allowed)
         if due_at is not None:
             due_stamp = stamp(due_at)
@@ -330,7 +332,7 @@ class ResponsibilityStore:
         if not isinstance(local_date_str, str) or not local_date_str.strip():
             raise ValueError('local_date_str must be a non-empty string')
         result = self.db.execute(
-            "UPDATE responsibilities SET status='completed', completed_day=?, claim_token=NULL, claim_until=NULL, generation=generation+1 WHERE id=? AND status IN ('active','paused','submitted','completed')",
+            "UPDATE responsibilities SET status='completed', completed_day=?, claim_token=NULL, claim_until=NULL, generation=generation+1 WHERE id=? AND status IN ('active','paused','queued','submitted','completed')",
             (local_date_str.strip(), item_id),
         )
         return result.rowcount == 1
@@ -354,7 +356,7 @@ class ResponsibilityStore:
                     claim_until=NULL,
                     generation=generation+1
                 WHERE kind='non_negotiable'
-                  AND status IN ('completed', 'submitted')
+                  AND status IN ('completed', 'submitted', 'queued')
                   AND (completed_day IS NULL OR completed_day != ?)
                 """,
                 (due_stamp, clean_day),

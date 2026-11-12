@@ -666,24 +666,44 @@ class Runner:
                 registry = self._open_route_registry(store, prof_dir)
                 settings = self._load_profile_settings(prof_dir)
                 if settings.get('paused'):
-                    return {'ok': False, 'injected': 0, 'woken_items': 0, 'error': 'Butler is paused'}
+                    return {
+                        'ok': False,
+                        'triggered': False,
+                        'injected': 0,
+                        'woken_items': 0,
+                        'reason': 'policy_blocked',
+                        'error': 'Butler is paused',
+                    }
                 effective_timezone, _ = resolve_effective_timezone(settings)
                 local_date = local_time(now, effective_timezone).date().isoformat()
 
                 if item_id is not None:
                     target = store.get(item_id)
                     if target is None:
-                        return {'ok': False, 'injected': 0, 'woken_items': 0, 'error': 'responsibility not found'}
+                        return {
+                            'ok': False,
+                            'triggered': False,
+                            'injected': 0,
+                            'woken_items': 0,
+                            'reason': 'not_found',
+                            'error': 'responsibility not found',
+                        }
+                    if target.get('status') in ('queued', 'submitted') and hasattr(store, 'reopen'):
+                        store.reopen(item_id, due_at=now)
+                        target = store.get(item_id)
                     if target.get('status') != 'active':
                         return {
                             'ok': False,
+                            'triggered': False,
                             'injected': 0,
                             'woken_items': 0,
+                            'reason': 'invalid_status',
                             'error': f"responsibility status is {target.get('status')}",
                         }
                     candidates = [target]
                 else:
-                    active = [it for it in store.list() if it.get('status') == 'active']
+                    all_rows = store.list()
+                    active = [it for it in all_rows if it.get('status') == 'active']
                     open_nn = [
                         it for it in active
                         if it.get('kind') == 'non_negotiable'
@@ -691,9 +711,31 @@ class Runner:
                         and (it.get('metadata') or {}).get('completed_day') != local_date
                     ]
                     due_now = [it for it in active if it.get('due_at') is not None and it['due_at'] <= now]
-                    candidates = open_nn or due_now
+                    candidates = open_nn or due_now or active
+                    if not candidates and hasattr(store, 'reopen'):
+                        awaiting = [
+                            it for it in all_rows
+                            if it.get('status') in ('queued', 'submitted')
+                            and not (
+                                it.get('kind') == 'non_negotiable'
+                                and (
+                                    it.get('completed_day') == local_date
+                                    or (it.get('metadata') or {}).get('completed_day') == local_date
+                                )
+                            )
+                        ]
+                        for it in awaiting:
+                            store.reopen(it['id'], due_at=now)
+                        if awaiting:
+                            candidates = [store.get(it['id']) for it in awaiting if store.get(it['id']) is not None]
                     if not candidates:
-                        return {'ok': True, 'injected': 0, 'woken_items': 0, 'reason': 'no open items to trigger'}
+                        return {
+                            'ok': True,
+                            'triggered': False,
+                            'injected': 0,
+                            'woken_items': 0,
+                            'reason': 'no open items to trigger',
+                        }
 
                 routable_targets = {}
                 original_due = {}
@@ -713,8 +755,10 @@ class Runner:
                 if not routable_targets:
                     return {
                         'ok': False,
+                        'triggered': False,
                         'injected': 0,
                         'woken_items': 0,
+                        'reason': 'route_missing',
                         'error': 'no authenticated route available',
                     }
 
@@ -760,11 +804,14 @@ class Runner:
                         if cur and cur.get('status') == 'active' and cur.get('claim_token') is None:
                             store.snooze(failed_id, prev_due)
 
+                ok = injected_batches > 0
                 return {
-                    'ok': injected_batches > 0,
+                    'ok': ok,
+                    'triggered': ok,
                     'injected': injected_batches,
                     'woken_items': woken_items,
                     'failed': failed_items,
+                    'reason': 'ok' if ok else 'injection_failed',
                 }
             finally:
                 if registry is not None and hasattr(registry, 'close'):

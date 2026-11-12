@@ -24,6 +24,7 @@ _BOOL_KEYS = (
 
 def defaults():
     return dict(
+        displayName='',
         timezone='',
         tone='Balanced',
         persistence='Occasional',
@@ -83,6 +84,9 @@ def validate(data):
         data = merged
     if not isinstance(data, dict) or set(data) != set(base):
         raise ValueError('Expected exactly the supported settings')
+    display_name = data['displayName']
+    if not isinstance(display_name, str) or len(display_name) > 80 or any(ord(c) < 32 for c in display_name):
+        raise ValueError('Invalid displayName')
     if not isinstance(data['timezone'], str) or len(data['timezone']) > 128:
         raise ValueError('Invalid timezone')
     if data['timezone']:
@@ -116,7 +120,9 @@ def validate(data):
             raise ValueError(f'Invalid {key}')
     if data['quietEnabled'] and (not data['quietStart'] or not data['quietEnd'] or data['quietStart'] == data['quietEnd']):
         raise ValueError('Quiet hours require distinct start and end times')
-    return dict(data)
+    cleaned = dict(data)
+    cleaned['displayName'] = display_name.strip()
+    return cleaned
 
 
 def load(directory):

@@ -94,10 +94,14 @@ def test_dashboard_http_roundtrip_and_read_only_responsibilities(tmp_path, monke
     assert preset_res.json()['settings']['applySystemControls'] is True
     assert preset_res.json()['hermes_sync']['applied'] is True
     assert client.post(url + '/preset', json={'preset': 'bad'}).status_code == 422
-    data = dict(defaults(), timezone='America/Chicago')
-    assert client.put(url + '/settings', json=data).status_code == 200
+    data = dict(defaults(), displayName='  Hayk  ', timezone='America/Chicago')
+    put_res = client.put(url + '/settings', json=data)
+    assert put_res.status_code == 200
+    assert put_res.json()['displayName'] == 'Hayk'
+    assert client.put(url + '/settings', json=dict(data, displayName='x' * 81)).status_code == 422
+    assert client.put(url + '/settings', json=dict(data, displayName='bad\nname')).status_code == 422
     assert client.put(url + '/settings', json=dict(data, dailyLimit=-1)).status_code == 422
-    assert client.get(url + '/state').json()['settings'] == data
+    assert client.get(url + '/state').json()['settings'] == dict(data, displayName='Hayk')
     active[0] = tmp_path / 'b'
     assert client.get(url + '/state').json()['settings'] == defaults()
     assert client.get(url + '/state').json()['responsibilities'] == []

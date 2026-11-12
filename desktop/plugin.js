@@ -113,48 +113,6 @@ function isSnoozedFuture(item) {
 }
 
 const styles = {
-  page: {
-    padding: '28px 32px 56px',
-    maxWidth: 1040,
-    margin: '0 auto',
-    color: 'var(--foreground, #1f2421)',
-    fontFamily: 'inherit',
-    lineHeight: 1.5,
-  },
-  headerRow: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    gap: 16,
-    flexWrap: 'wrap',
-    marginBottom: 20,
-  },
-  titleGroup: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: 6,
-  },
-  h1: {
-    margin: 0,
-    fontSize: 24,
-    fontWeight: 650,
-    letterSpacing: '-0.02em',
-    display: 'flex',
-    alignItems: 'center',
-    gap: 10,
-    flexWrap: 'wrap',
-  },
-  subtitle: {
-    margin: 0,
-    fontSize: 13.5,
-    color: 'var(--muted-foreground, #6e776f)',
-  },
-  headerActions: {
-    display: 'flex',
-    gap: 8,
-    alignItems: 'center',
-    flexWrap: 'wrap',
-  },
   card: {
     background: 'var(--card, rgba(127, 127, 127, 0.04))',
     border: '1px solid var(--border, rgba(127, 127, 127, 0.2))',
@@ -187,30 +145,6 @@ const styles = {
     fontSize: 12.5,
     color: 'var(--muted-foreground, #6e776f)',
   },
-  tabBar: {
-    display: 'inline-flex',
-    gap: 4,
-    padding: 4,
-    borderRadius: 11,
-    background: 'color-mix(in srgb, var(--foreground, #888) 6%, transparent)',
-    border: '1px solid var(--border, rgba(127, 127, 127, 0.18))',
-    marginBottom: 20,
-    flexWrap: 'wrap',
-  },
-  tabBtn: (active) => ({
-    border: 'none',
-    borderRadius: 8,
-    padding: '7px 14px',
-    fontSize: 13,
-    fontWeight: active ? 600 : 500,
-    cursor: 'pointer',
-    background: active ? 'var(--card, rgba(255,255,255,0.9))' : 'transparent',
-    color: active ? 'var(--foreground, #1f2421)' : 'var(--muted-foreground, #6e776f)',
-    boxShadow: active ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
-    display: 'inline-flex',
-    alignItems: 'center',
-    gap: 7,
-  }),
   btn: (variant = 'secondary', disabled = false) => {
     const base = {
       borderRadius: 9,
@@ -462,6 +396,7 @@ function Page({ ctx }) {
   const [projectText, setProjectText] = useState(PROJECT_AGENTS_SUGGESTION);
   const [projectMessage, setProjectMessage] = useState('');
   const [wizardForm, setWizardForm] = useState({
+    displayName: '',
     timezone: '',
     applyQuietPreset: true,
     quietEnabled: true,
@@ -567,6 +502,7 @@ function Page({ ctx }) {
     setReviewApplied(false);
     const baseTz = (prefs && prefs.timezone) || stateData.detected_system_timezone || stateData.effective_timezone || '';
     setWizardForm({
+      displayName: (prefs && prefs.displayName) || '',
       timezone: baseTz,
       applyQuietPreset: true,
       quietEnabled: prefs ? prefs.quietEnabled !== false : true,
@@ -814,6 +750,7 @@ function Page({ ctx }) {
         .map((s) => s.trim())
         .filter(Boolean);
       const res = await restCall(ctx, 'POST', '/enable-proactive', {
+        displayName: (wizardForm.displayName || '').trim(),
         timezone: wizardForm.timezone.trim(),
         applyQuietPreset: Boolean(wizardForm.applyQuietPreset),
         quietEnabled: Boolean(wizardForm.quietEnabled),
@@ -907,25 +844,25 @@ function Page({ ctx }) {
   const quota = stateData.quota || {};
   const setupNeeded = !prefs || !prefs.notificationsEnabled || !stateData.allow_gateway_injection || !(prefs.timezone || stateData.detected_system_timezone);
 
-  let statusBadge = { tone: 'amber', label: 'Setup Needed' };
+  let statusTone = 'amber';
   if (prefs) {
     if (prefs.paused) {
-      statusBadge = { tone: 'muted', label: 'Paused' };
+      statusTone = 'muted';
     } else if (!prefs.notificationsEnabled || !stateData.allow_gateway_injection) {
-      statusBadge = { tone: 'amber', label: 'Setup Needed' };
+      statusTone = 'amber';
     } else if (quota.in_quiet_hours) {
-      statusBadge = { tone: 'accent', label: 'In Quiet Hours' };
+      statusTone = 'accent';
     } else {
-      statusBadge = { tone: 'ok', label: 'Active & Armed' };
+      statusTone = 'ok';
     }
   }
 
   const activeNN = stateData.non_negotiables.filter((i) => i.status !== 'stopped');
   const doneNNCount = activeNN.filter((i) => i.done_today).length;
   const totalNNCount = activeNN.length;
-  const nnProgressPct = totalNNCount > 0 ? Math.round((doneNNCount / totalNNCount) * 100) : 0;
 
-  const openCommitments = stateData.commitments.filter((i) => i.status === 'active' || i.status === 'queued' || i.status === 'submitted');
+  const isOpenCommitment = (i) => i.kind !== 'non_negotiable' && (i.status === 'active' || i.status === 'queued' || i.status === 'submitted');
+  const openCommitments = stateData.commitments.filter(isOpenCommitment);
 
   const renderItemRow = (item, compact = false) => {
     const isNN = item.kind === 'non_negotiable';
@@ -985,6 +922,9 @@ function Page({ ctx }) {
             isPaused && h('span', {
               style: { fontSize: 11, padding: '2px 7px', borderRadius: 999, background: 'color-mix(in srgb, #c8872b 16%, transparent)' },
             }, 'Paused'),
+            (item.status === 'submitted' || item.status === 'queued') && !isDone && h('span', {
+              style: { fontSize: 11, padding: '2px 7px', borderRadius: 999, background: 'color-mix(in srgb, var(--foreground, #888) 9%, transparent)' },
+            }, item.status === 'queued' ? 'Queued' : 'Awaiting follow-up'),
             isDone && isNN && h('span', {
               style: { fontSize: 11, padding: '2px 7px', borderRadius: 999, background: 'color-mix(in srgb, #459457 18%, transparent)' },
             }, 'Done today · resets tomorrow'),
@@ -1002,9 +942,11 @@ function Page({ ctx }) {
             !isDone && h('span', null,
               item.status === 'submitted'
                 ? `Nudged ${item.nudge_count || 0}x · awaiting next touch decision`
-                : item.nudge_count > 0
-                  ? `Nudged ${item.nudge_count}x · next at ${nextTimeStr || fullDueStr}`
-                  : `Next check-in: ${fullDueStr}`,
+                : item.status === 'queued'
+                  ? 'Check-in queued'
+                  : item.nudge_count > 0
+                    ? `Nudged ${item.nudge_count}x · next at ${nextTimeStr || fullDueStr}`
+                    : `Next check-in: ${fullDueStr}`,
             ),
             item.deadline_at && h('span', null, `Hard deadline: ${formatDateTime(item.deadline_at, effTz)}`),
             item.prep_hint && h('span', { style: { fontStyle: 'italic' } }, `Prep: ${item.prep_hint}`),
@@ -1241,6 +1183,8 @@ function Page({ ctx }) {
               return h('div', { key: item.id, className: 'ovc-essential-item' },
                 h('button', {
                   type: 'button',
+                  role: 'checkbox',
+                  'aria-checked': done,
                   className: `ovc-checkbox${done ? ' checked' : ''}`,
                   disabled: busy,
                   'aria-label': done ? `Reopen ${item.title}` : `Mark ${item.title} complete`,
@@ -1372,14 +1316,14 @@ function Page({ ctx }) {
     const filterDefs = [
       { id: 'all', label: 'All', count: all.length },
       { id: 'non_negotiables', label: 'Daily Non-Negotiables', count: all.filter((i) => i.kind === 'non_negotiable').length },
-      { id: 'commitments', label: 'Open Commitments', count: all.filter((i) => i.kind !== 'non_negotiable' && i.status === 'active').length },
+      { id: 'commitments', label: 'Open Commitments', count: all.filter(isOpenCommitment).length },
       { id: 'snoozed', label: 'Snoozed / Paused', count: all.filter((i) => i.status === 'paused' || isSnoozedFuture(i)).length },
       { id: 'completed', label: 'Completed', count: all.filter((i) => i.done_today || i.status === 'completed' || i.status === 'stopped').length },
     ];
 
     const filtered = all.filter((item) => {
       if (itemFilter === 'non_negotiables') return item.kind === 'non_negotiable';
-      if (itemFilter === 'commitments') return item.kind !== 'non_negotiable' && item.status === 'active';
+      if (itemFilter === 'commitments') return isOpenCommitment(item);
       if (itemFilter === 'snoozed') return item.status === 'paused' || isSnoozedFuture(item);
       if (itemFilter === 'completed') return Boolean(item.done_today) || item.status === 'completed' || item.status === 'stopped';
       return true;
@@ -1695,8 +1639,21 @@ function Page({ ctx }) {
           },
         },
           h('div', null,
-            h('label', { style: { display: 'block', fontSize: 12.5, fontWeight: 560, marginBottom: 5 } }, 'Daily wake cap (max proactive nudges/day)'),
+            h('label', { htmlFor: 'butler-pref-display-name', style: { display: 'block', fontSize: 12.5, fontWeight: 560, marginBottom: 5 } }, 'Your name (optional, for greetings)'),
             h('input', {
+              id: 'butler-pref-display-name',
+              type: 'text',
+              maxLength: 80,
+              placeholder: 'Used in your daily greeting',
+              value: prefs.displayName || '',
+              onChange: (e) => updatePref('displayName', e.target.value),
+              style: styles.input,
+            }),
+          ),
+          h('div', null,
+            h('label', { htmlFor: 'butler-pref-daily-limit', style: { display: 'block', fontSize: 12.5, fontWeight: 560, marginBottom: 5 } }, 'Daily wake cap (max proactive nudges/day)'),
+            h('input', {
+              id: 'butler-pref-daily-limit',
               type: 'number',
               min: 0,
               max: 1000,
@@ -1730,8 +1687,9 @@ function Page({ ctx }) {
               'Owner-set floor between wakes; 0 disables this gate.'),
           ),
           h('div', null,
-            h('label', { style: { display: 'block', fontSize: 12.5, fontWeight: 560, marginBottom: 5 } }, 'Confirmed IANA Timezone'),
+            h('label', { htmlFor: 'butler-pref-timezone', style: { display: 'block', fontSize: 12.5, fontWeight: 560, marginBottom: 5 } }, 'Confirmed IANA Timezone'),
             h('input', {
+              id: 'butler-pref-timezone',
               type: 'text',
               placeholder: stateData.detected_system_timezone || 'America/Chicago',
               value: prefs.timezone || '',
@@ -1970,9 +1928,20 @@ function Page({ ctx }) {
           h('p', { style: { margin: '0 0 14px', fontSize: 13, color: 'var(--muted-foreground, #6e776f)' } },
             'Hermes uses your local clock so morning check-ins and quiet hours land accurately.',
           ),
-          h('label', { style: { display: 'block', fontSize: 12.5, fontWeight: 560, marginBottom: 5 } }, 'IANA Timezone'),
+          h('label', { htmlFor: 'butler-wiz-display-name', style: { display: 'block', fontSize: 12.5, fontWeight: 560, marginBottom: 5 } }, 'Your name (optional)'),
+          h('input', {
+            id: 'butler-wiz-display-name',
+            type: 'text',
+            maxLength: 80,
+            value: wizardForm.displayName,
+            onChange: (e) => setWizardForm((f) => ({ ...f, displayName: e.target.value })),
+            placeholder: 'Used in your Butler greeting',
+            style: { ...styles.input, marginBottom: 12 },
+          }),
+          h('label', { htmlFor: 'butler-wiz-timezone', style: { display: 'block', fontSize: 12.5, fontWeight: 560, marginBottom: 5 } }, 'IANA Timezone'),
           h('div', { style: { display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap' } },
             h('input', {
+              id: 'butler-wiz-timezone',
               type: 'text',
               value: wizardForm.timezone,
               onChange: (e) => setWizardForm((f) => ({ ...f, timezone: e.target.value })),
@@ -2182,7 +2151,7 @@ function Page({ ctx }) {
       h('header', { className: 'ovc-top' },
         h('div', { className: 'ovc-brand' }, h('span', { className: 'ovc-brand-mark' }, '❧'), ' BUTLER'),
         h('div', { className: 'ovc-right' },
-          h('span', { className: `ovc-status ${statusBadge.tone}` }, h('i', { className: 'ovc-dot' }), statusText),
+          h('span', { className: `ovc-status ${statusTone}` }, h('i', { className: 'ovc-dot' }), statusText),
           h('button', { type: 'button', className: 'ovc-toplink', onClick: () => goTab('preferences') }, 'Preferences \u00a0⚙'),
         ),
       ),

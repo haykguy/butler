@@ -394,6 +394,36 @@ def test_advance_followup_and_defer_claim_fencing_and_wake_logs(tmp_path):
         assert final_state['due_at'] == next_due
         assert final_state['nudge_count'] == 2
 
+        # Submitted items support snooze, pause, resume, complete, reopen, and stop transitions
+        assert item is not None
+        iid = str(item['id'])
+
+        def must_get():
+            row = store.get(iid)
+            assert row is not None
+            return row
+
+        snoozed_until = next_due + timedelta(hours=1)
+        assert store.snooze(iid, snoozed_until) is True
+        assert must_get()['status'] == 'active'
+        assert must_get()['due_at'] == snoozed_until
+
+        # Transition back to submitted and verify pause/complete/stop from submitted
+        c4 = store.claim_due(snoozed_until, lease_seconds=60)[0]
+        assert store.advance_followup(iid, c4['claim_token'], snoozed_until, next_due_at=None, stage=3, next_status='submitted') is True
+        assert store.pause(iid) is True
+        assert must_get()['status'] == 'paused'
+        assert store.resume(iid) is True
+        c5 = store.claim_due(snoozed_until, lease_seconds=60)[0]
+        assert store.advance_followup(iid, c5['claim_token'], snoozed_until, next_due_at=None, stage=3, next_status='submitted') is True
+        assert store.complete(iid) is True
+        assert must_get()['status'] == 'completed'
+        assert store.reopen(iid, due_at=snoozed_until) is True
+        c6 = store.claim_due(snoozed_until, lease_seconds=60)[0]
+        assert store.advance_followup(iid, c6['claim_token'], snoozed_until, next_due_at=None, stage=3, next_status='submitted') is True
+        assert store.stop(iid) is True
+        assert must_get()['status'] == 'stopped'
+
         # Wake logs recorded and listed newest first
         store.record_wake_log(item['id'], now, 'nudge', 'deferred', 'quiet_hours')
         store.record_wake_log(item['id'], now + timedelta(minutes=5), 'nudge', 'sent', 'stage=2')
