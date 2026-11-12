@@ -24,12 +24,29 @@
 
 ---
 
+## 🎬 Watch Butler in Action
+
+> *"Most agents wait. Butler follows through."*
+
+https://github.com/haykguy/butler/releases/download/v0.3.0/Butler_demo_v8_FULL.mp4
+
+<p align="center">
+  <a href="https://github.com/haykguy/butler/releases/download/v0.3.0/Butler_demo_v8_FULL.mp4">
+    <img src="assets/BUTLER_ending_screen.png" alt="Butler Demo Video — Most agents wait. Butler follows through." width="100%"/>
+  </a>
+  <br/>
+  <em>▶️ <b><a href="https://github.com/haykguy/butler/releases/download/v0.3.0/Butler_demo_v8_FULL.mp4">Watch the full 1080p demo walkthrough video</a></b> (1m 42s · Luigi Boccherini Minuet · Hermes Plugin Store)</em>
+</p>
+
+---
+
 ## How This Guide Is Organized
 
 This repository is written in **two halves** so anyone can read as far as they need:
 
 | Section | Who It's For | What You'll Learn |
 | :--- | :--- | :--- |
+| **[🎬 Demo Video](#-watch-butler-in-action)** | **Everyone** | Full 1080p walkthrough: proactive follow-ups, daily non-negotiables, quiet hours, and Hermes Plugin Store installation. |
 | **[Part I — Product & Everyday Guide](#part-i--product--everyday-guide)** | **Everyone** (zero AI jargon required) | Why standard AI feels passive, the 4 ways Butler turns Hermes into a real proactive assistant, everyday before-and-after examples, and 60-second setup. |
 | **[Part II — Technical & Engineering Reference](#part-ii--technical-architecture--engineering-reference)** | **Developers, security reviewers & plugin authors** | Public Hermes SDK architecture, action-first wakes, follow-up escalation, `pre_llm_call` & `post_gateway_admission` lifecycles, SQLite `BEGIN IMMEDIATE` leasing, dual-gate privacy, and `config.yaml` sync matrix. |
 
