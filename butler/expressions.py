@@ -1,27 +1,15 @@
-"""Opt-in expressions through the local Photon sidecar, with strict targeting."""
+"""Channel expressions (reactions, replies, effects) with strict targeting.
+
+Butler never reads Hermes runtime/secret stores (e.g. the Photon sidecar
+token) or talks to a platform sidecar directly. Reactions and replies stay
+disabled until message membership can be verified, and screen/bubble effects
+stay disabled until Hermes exposes a public ``ctx.platform_actions`` verb for
+them. Every such request fails closed without contacting any backend.
+"""
 import json
-from pathlib import Path
-import urllib.request
-from .paths import hermes_home
 
-
-class _NoRedirect(urllib.request.HTTPRedirectHandler):
-    def redirect_request(self, req, fp, code, msg, headers, newurl):
-        return None
-
-
-def _sidecar(path, body):
-    """Call the local Photon sidecar using its runtime discovery record."""
-    home = hermes_home()
-    record = json.loads((home / "runtime" / "photon-sidecar.json").read_text())
-    port, token = record["port"], record["token"]
-    if type(port) is not int or not 1 <= port <= 65535 or not isinstance(token, str) or not token:
-        raise ValueError("invalid Photon sidecar record")
-    request = urllib.request.Request(f"http://127.0.0.1:{port}{path}",
-        data=json.dumps(body).encode(), headers={"Content-Type": "application/json",
-        "X-Hermes-Sidecar-Token": token}, method="POST")
-    with urllib.request.build_opener(_NoRedirect()).open(request, timeout=60) as response:
-        return json.loads(response.read())
+EFFECTS_UNAVAILABLE = ('iMessage effects are unavailable: Hermes has no public plugin route for them yet '
+                       '(pending a send_effect verb on ctx.platform_actions, NousResearch/hermes-agent#154299). Send the text as a normal reply.')
 
 
 _EFFECTS = frozenset(('slam', 'loud', 'gentle', 'invisible', 'balloons', 'confetti',
@@ -39,7 +27,7 @@ def register_expression_tools(ctx, session_provider=None):
     """Register one tool. session_provider is injectable for isolated tests.
 
     Only the active photon chat is eligible. Reactions and replies are disabled
-    because the available sidecar does not reliably validate message membership.
+    because message membership cannot be verified; effects await a public Hermes route.
     """
     session = session_provider or _session
 
@@ -60,9 +48,9 @@ def register_expression_tools(ctx, session_provider=None):
             return result(ok=False, error='active platform and chat required')
         if action == 'capabilities':
             return result(ok=True, platform=platform, chat_id=chat,
-                          capabilities={'react': False, 'reply': False,
-                                        'effect': platform == 'photon'},
-                          note='Reactions and replies are disabled until message membership can be verified. Effects require a compatible running Photon sidecar.')
+                          capabilities={'react': False, 'reply': False, 'effect': False},
+                          note='Reactions and replies are disabled until message membership can be verified. '
+                               'Effects are disabled until Hermes exposes a public send_effect platform action.')
         if platform != 'photon':
             return result(ok=False, error='unsupported channel or missing adapter bridge', platform=platform, action=action)
         requested_chat = args.get('chat_id')
@@ -94,20 +82,13 @@ def register_expression_tools(ctx, session_provider=None):
                 if not isinstance(effect, str) or effect not in _EFFECTS:
                     return result(ok=False, error='unknown or missing iMessage effect')
                 payload['effect'] = effect
-        try:
-            if action != 'effect':
-                return result(ok=False, error='message membership cannot be verified safely')
-            raw = _sidecar('/send-effect', {'spaceId': chat, **payload})
-            response = json.loads(raw) if isinstance(raw, str) else raw
-        except Exception:
-            return result(ok=False, error='Photon sidecar unavailable or failed')
-        if not isinstance(response, dict) or not isinstance(response.get('ok'), bool):
-            return result(ok=False, error='invalid response from Photon sidecar')
-        return result(**response)
+        if action == 'effect':
+            return result(ok=False, error=EFFECTS_UNAVAILABLE)
+        return result(ok=False, error='message membership cannot be verified safely')
 
-    description = ('Inspect channel capabilities or send effects through the local Photon sidecar. '
-                   'Provide exact active chat_id and explicit message_id for reactions and replies. '
-                   'Telegram operations currently require an adapter bridge; no fallback send is performed.')
+    description = ('Inspect channel expression capabilities for the active chat. Reactions, threaded replies '
+                   'and iMessage effects currently fail closed (no verified message membership and no public '
+                   'Hermes platform action for effects); no fallback send is performed.')
     schema = {'name': 'butler_expression', 'description': description,
               'parameters': {'type': 'object', 'properties': {
                   'action': {'type': 'string', 'enum': ['capabilities', 'react', 'reply', 'effect']},

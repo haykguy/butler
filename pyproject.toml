@@ -1,6 +1,6 @@
 [project]
 name = "hermes-butler"
-version = "0.3.0"
+version = "0.4.0"
 description = "Proactive assistant controls for Hermes Agent: live local-time & session-lifetime awareness, system notification/load controls, durable responsibilities, and privacy-first guardrails."
 readme = "README.md"
 requires-python = ">=3.11"
