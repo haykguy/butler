@@ -75,7 +75,7 @@ Instead of waiting around for your next prompt, Butler remembers what matters to
 
 - **Keeps track of everything you commit to:** Goals, deadlines, open loops, and daily non-negotiables are stored durably on your machine—so starting a `/new` conversation or restarting your computer never wipes the slate clean.
 - **Acts proactively *before* messaging you:** When a check-in or task comes due, Butler wakes Hermes to do real legwork first—checking statuses, pulling context, or drafting the next step—so it texts you with progress, not an empty *"Don't forget!"* reminder.
-- **Holds you accountable like a real human:** Follows up across the day, rolls daily habits cleanly to the next morning, and keeps texts concise and human instead of writing essays. On Photon iMessage it can add a screen/bubble effect when a compatible Photon sidecar is running; tapback reactions and threaded replies are **currently disabled** (they fail closed until the gateway can verify which chat a message belongs to — see [`docs/message-provenance-integration.md`](docs/message-provenance-integration.md)).
+- **Holds you accountable like a real human:** Follows up across the day, rolls daily habits cleanly to the next morning, and keeps texts concise and human instead of writing essays. On Photon iMessage it can send images and voice notes as normal reply attachments (Butler stages the file in the Hermes media cache and the reply carries a `MEDIA:` directive, so Hermes' own Photon adapter delivers it — Butler never touches the sidecar or its token). Screen/bubble effects and polls are **currently disabled** until Hermes exposes public `send_effect`/`send_poll` platform actions; tapback reactions and threaded replies are also **disabled** (they fail closed until the gateway can verify which chat a message belongs to — see [`docs/message-provenance-integration.md`](docs/message-provenance-integration.md)).
 
 ---
 
@@ -155,7 +155,7 @@ Most accountability tools confuse **rudeness** with **persistence**. Butler give
 
 ## 5. Architectural Overview & Core Invariants
 
-Butler (`v0.3.0`, `requires_hermes: ">=0.23.1"`) is a unified **Hermes Agent + Hermes Desktop** standalone plugin engineered against **public Hermes SDK surfaces** (`hermes_cli/data/plugin_api.json`).
+Butler (`v0.4.0`, `requires_hermes: ">=0.23.1"`) is a unified **Hermes Agent + Hermes Desktop** standalone plugin engineered against **public Hermes SDK surfaces** (`hermes_cli/data/plugin_api.json`).
 
 <p align="center">
   <img src="assets/system-architecture.svg" alt="Butler System Architecture across Hermes Core, Butler Engine, and Profile Storage" width="100%"/>
@@ -319,7 +319,6 @@ butler/
 │   ├── delivery-event-proposal.md   # Upstream design proposal for opt-in post-transport on_delivery_event
 │   ├── message-provenance-integration.md # Why reactions/replies stay disabled; contract needed to enable them
 │   └── media/                       # Catalog banner and Desktop page screenshot
-├── photon-extra/                    # Unwired Photon sidecar module (contact card / background); not installed or enabled
 ├── butler/
 │   ├── followup.py                  # Tone & Persistence preference hints, quiet-hours gate, batch coalescing, wake prompt
 │   ├── runner.py                    # Background wake runner, watcher polling & immediate trigger execution
@@ -333,9 +332,9 @@ butler/
 │   ├── notifications.py             # Safety-aware policy + public hermes_cli.config merge patch builder
 │   ├── settings.py                  # Strict schema validator, atomic 0600 JSON persistence, quiet_human preset
 │   ├── policy.py                    # Fail-closed capture_allowed() + SQLite reserve_wake() daily cap ledger
-│   ├── expressions.py               # Agent tool: butler_expression (Photon effects; reactions/replies disabled)
-│   ├── imessage_tools.py            # Agent tool: butler_imessage (voice, image, card helpers; local ffmpeg/ffprobe)
-│   ├── imessage_voice.py / imessage_imaging.py / imessage_media.py / imessage_cards.py / imessage_photon_extensions.py
+│   ├── expressions.py               # Agent tool: butler_expression (capabilities; effects/reactions/replies fail closed)
+│   ├── imessage_tools.py            # Agent tool: butler_imessage (image/voice via MEDIA: reply attachments; local ffmpeg/ffprobe)
+│   ├── imessage_voice.py / imessage_imaging.py / imessage_media.py
 │   ├── prompt_review.py             # Optional SOUL.md / butler-capabilities skill review (preview, select, backup)
 │   ├── channels.py                  # ChannelCapabilities & fail-closed operation descriptors
 │   ├── events.py                    # Bounded SQLite EventLedger with checkpoints & XML untrusted-content tags
@@ -353,8 +352,8 @@ butler/
 1. **`butler_create`** — Track a proactive responsibility (`commitment`, `non_negotiable`, `check_in`, `watch`, `open_loop`) with smart timezone-aware auto-scheduling, deadlines, recurrence intervals, and action-first wake instructions.
 2. **`butler_manage`** — Full lifecycle control (`list`, `get`, `pause`, `resume`, `snooze`, `complete`, `reopen`, `stop`, `remove`, `update`) over tracked commitments, habits, and watches.
 3. **`butler_controls`** — Inspect or update live time awareness, coaching dials (`tone`, `persistence`), and Hermes system notification/load controls (`status`, `detect_timezone`, `apply_preset`, `update` with privacy keys locked).
-4. **`butler_expression`** — Native messaging expression bridge (`capabilities`, `react`, `reply`, `effect`). Only `effect` on Photon iMessage can succeed today; `react`/`reply` are disabled and other channels fail cleanly.
-5. **`butler_imessage`** — iMessage helpers for voice notes, images and contact cards (uses local `ffmpeg`/`ffprobe`); see `butler/imessage_tools.py` for the action list and its fail-closed limits.
+4. **`butler_expression`** — Native messaging expression bridge (`capabilities`, `react`, `reply`, `effect`). Only `capabilities` succeeds today: `effect` waits for a public Hermes `send_effect` platform action, `react`/`reply` are disabled until message membership can be verified, and other channels fail cleanly.
+5. **`butler_imessage`** — iMessage helpers for images, voice notes (local `ffmpeg`/`ffprobe`, optional Hermes TTS) and image edits. `send_image`/`voice_note` stage the file in the Hermes media cache via the public `gateway.platforms.base` helpers and return a `MEDIA:` directive the model puts in its reply, so delivery goes through Hermes' normal Photon attachment path. Effects and polls fail closed pending public `send_effect`/`send_poll` verbs on `ctx.platform_actions`; see `butler/imessage_tools.py` for the full action list.
 
 ### Hermes Desktop Dashboard Endpoints (`/api/plugins/butler`)
 
@@ -383,7 +382,7 @@ butler/
 
 ```bash
 # 1. Run the Python test suite (unit, escalation, routes, watchers, awareness, integration)
-#    Expected at v0.3.0: 198 passed, 12 skipped
+#    Expected at v0.4.0: 227 passed, 1 skipped
 PYTHONPATH=. python3 -m pytest tests -q
 
 # 2. Validate Hermes Desktop ESM bundle syntax

@@ -1,4 +1,6 @@
 import json
+from pathlib import Path
+
 from butler.imessage_tools import register_imessage_tools
 
 
@@ -7,17 +9,34 @@ class Context:
         self.tool = kwargs
 
 
-def setup(sidecar, session=lambda: ('photon', 'chat-A')):
-    ctx = Context()
-    register_imessage_tools(ctx, session_provider=session, sidecar=sidecar)
+class MediaCache:
+    """Stands in for gateway.platforms.base.cache_*_from_bytes."""
+    def __init__(self, root):
+        self.root = Path(root)
+        self.root.mkdir(parents=True, exist_ok=True)
+        self.calls = []
+
+    def __call__(self, kind, data, ext):
+        path = self.root / f'{kind}_{len(self.calls)}{ext}'
+        path.write_bytes(data)
+        self.calls.append((kind, ext, path))
+        return str(path)
+
+
+def setup(cache=None, session=lambda: ('photon', 'chat-A'), ctx=None):
+    ctx = ctx or Context()
+    register_imessage_tools(ctx, session_provider=session, media_cache=cache)
     return lambda **args: json.loads(ctx.tool['handler'](args))
 
 
-def test_poll_dispatches_to_active_chat():
+def test_poll_and_effect_fail_closed_without_public_route():
     calls = []
-    run = setup(lambda path, body: calls.append((path, body)) or {'ok': True})
-    assert run(action='poll', title='Lunch?', options=['A', 'B'])['ok']
-    assert calls == [('/send-poll', {'spaceId': 'chat-A', 'title': 'Lunch?', 'options': ['A', 'B']})]
+    run = setup(lambda *a: calls.append(a))
+    poll = run(action='poll', title='Lunch?', options=['A', 'B'])
+    assert not poll['ok'] and 'send_poll' in poll['error']
+    effect = run(action='effect', text='hello', effect='slam')
+    assert not effect['ok'] and 'send_effect' in effect['error']
+    assert not calls
 
 
 def test_message_targeting_fails_closed():
@@ -33,17 +52,18 @@ def test_message_targeting_fails_closed():
 def test_session_and_card_fail_closed():
     calls = []
     run = setup(lambda *args: calls.append(args), lambda: ('telegram', 'chat-A'))
-    assert not run(action='effect', text='x', effect='slam')['ok']
+    assert not run(action='send_image', path='/tmp/x.png')['ok']
     run = setup(lambda *args: calls.append(args))
     assert not run(action='card', title='x', choices=['a'])['ok']
     assert not run(action='thread')['ok']
+    assert not run(action='background', clear=True)['ok']
+    assert not run(action='contact_card')['ok']
     assert not calls
 
 
 def test_entrypoint_registers_namespaced_tool():
     import importlib.util
     import sys
-    from pathlib import Path
     root = Path(__file__).resolve().parents[1]
     spec = importlib.util.spec_from_file_location('butler_imessage_plugin_test', root / '__init__.py', submodule_search_locations=[str(root)])
     module = importlib.util.module_from_spec(spec)
@@ -62,70 +82,11 @@ def test_entrypoint_registers_namespaced_tool():
         sys.modules.pop(spec.name, None)
 
 
-def test_invalid_effect_does_not_raise_or_dispatch():
-    calls = []
-    run = setup(lambda *args: calls.append(args))
-    assert not run(action='effect', text='hello', effect=[])['ok']
-    assert not calls
-
-
-def test_attachment_and_background_dispatch(tmp_path):
-    media = tmp_path / 'audio.m4a'
-    media.write_bytes(b'test')
-    calls = []
-    run = setup(lambda path, body: calls.append((path, body)) or {'ok': True})
-    assert not run(action='voice_note', audio_path=str(media))['ok']
-    assert not run(action='send_image', path=str(media), caption='caption')['ok']
-    before = len(calls)
-    assert not run(action='background', clear=True)['ok']
-    assert not run(action='contact_card')['ok']
-    assert len(calls) == before
-
-
-def test_real_loopback_sidecar_contract(tmp_path, monkeypatch):
-    from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-    from threading import Thread
-    calls = []
-    class Handler(BaseHTTPRequestHandler):
-        def do_POST(self):
-            data = json.loads(self.rfile.read(int(self.headers['Content-Length'])))
-            calls.append((self.path, self.headers.get('X-Hermes-Sidecar-Token'), data))
-            self.send_response(200)
-            self.end_headers()
-            self.wfile.write(b'{"ok":true,"messageId":"fixture"}')
-        def log_message(self, *args): pass
-    server = ThreadingHTTPServer(('127.0.0.1', 0), Handler)
-    thread = Thread(target=server.serve_forever, daemon=True)
-    thread.start()
-    try:
-        (tmp_path / 'runtime').mkdir()
-        (tmp_path / 'runtime' / 'photon-sidecar.json').write_text(json.dumps({'port': server.server_port, 'token': 'fixture-token'}))
-        monkeypatch.setenv('HERMES_HOME', str(tmp_path))
-        from butler.expressions import _sidecar
-        run = setup(_sidecar)
-        assert run(action='poll', title='Lunch?', options=['A', 'B'])['ok']
-        assert run(action='effect', text='hello', effect='slam')['ok']
-        audio = tmp_path / 'voice.m4a'
-        audio.write_bytes(b'fixture')
-        assert not run(action='voice_note', audio_path=str(audio))['ok']
-        assert not run(action='send_image', path=str(audio))['ok']
-        assert calls == [
-            ('/send-poll', 'fixture-token', {'spaceId': 'chat-A', 'title': 'Lunch?', 'options': ['A', 'B']}),
-            ('/send-effect', 'fixture-token', {'spaceId': 'chat-A', 'text': 'hello', 'effect': 'slam'}),
-
-        ]
-    finally:
-        server.shutdown()
-        thread.join()
-        server.server_close()
-
-
-def test_mismatched_chat_and_invalid_sidecar_fail_closed():
-    calls = []
-    run = setup(lambda *args: calls.append(args))
-    assert not run(action='effect', chat_id='other', text='x', effect='slam')['ok']
-    assert not calls
-    assert not run(action='contact_card')['ok']
+def test_mismatched_chat_fails_closed(tmp_path):
+    cache = MediaCache(tmp_path / 'cache')
+    run = setup(cache)
+    assert not run(action='send_image', chat_id='other', path='/tmp/x.png')['ok']
+    assert not cache.calls
 
 
 def test_local_file_operations_require_trusted_provenance(tmp_path):
@@ -133,66 +94,53 @@ def test_local_file_operations_require_trusted_provenance(tmp_path):
     secret.write_bytes(b'private')
     audio = secret.with_suffix('.m4a')
     audio.write_bytes(b'private')
-    calls = []
-    run = setup(lambda *args: calls.append(args) or {'ok': True})
+    cache = MediaCache(tmp_path / 'cache')
+    run = setup(cache)
     assert not run(action='send_image', path=str(secret))['ok']
     assert not run(action='voice_note', audio_path=str(audio))['ok']
     assert not run(action='image_edit', input_path=str(secret), operations=[])['ok']
-    assert not calls
+    assert not cache.calls
 
 
-def test_send_image_dispatches_private_snapshot(tmp_path, monkeypatch):
+def test_send_image_returns_media_directive_for_reply(tmp_path, monkeypatch):
     home = tmp_path / 'home'
-    cache = home / 'image_cache'
-    cache.mkdir(parents=True)
+    (home / 'image_cache').mkdir(parents=True)
     monkeypatch.setenv('HERMES_HOME', str(home))
-    image = cache / 'test.png'
+    image = home / 'image_cache' / 'test.png'
     image.write_bytes(b"\x89PNG\r\n\x1a\nfixture")
-    calls = []
-    def sidecar(path, body):
-        from pathlib import Path
-        calls.append((path, body.copy(), Path(body['path']).read_bytes()))
-        return {'ok': True}
-    run = setup(sidecar)
-    assert run(action='send_image', path=str(image), caption='hello')['ok']
-    assert calls[0][0] == '/send-attachment'
-    assert calls[0][1]['spaceId'] == 'chat-A'
-    assert calls[0][1]['kind'] == 'attachment'
-    assert calls[0][1]['caption'] == 'hello'
-    assert calls[0][2] == image.read_bytes()
-    assert not run(action='send_image', path=str(image), chat_id='other')['ok']
-    assert len(calls) == 1
+    cache = MediaCache(tmp_path / 'cache')
+    run = setup(cache)
+    response = run(action='send_image', path=str(image), caption='hello')
+    assert response['ok'], response
+    assert response['delivery'] == 'reply_attachment'
+    assert response['reply_directive'] == f"MEDIA:{response['media_path']}"
+    assert response['caption'] == 'hello'
+    assert cache.calls[0][:2] == ('image', '.png')
+    assert Path(response['media_path']).read_bytes() == image.read_bytes()
 
 
-def test_voice_note_converts_authorized_audio(tmp_path, monkeypatch):
+def test_voice_note_converts_authorized_audio_to_voice_attachment(tmp_path, monkeypatch):
     import wave
-    from pathlib import Path
     home = tmp_path / 'home'
-    cache = home / 'image_cache'
-    cache.mkdir(parents=True)
+    (home / 'image_cache').mkdir(parents=True)
     monkeypatch.setenv('HERMES_HOME', str(home))
-    audio = cache / 'test.wav'
+    audio = home / 'image_cache' / 'test.wav'
     with wave.open(str(audio), 'wb') as out:
         out.setparams((1, 2, 8000, 0, 'NONE', 'not compressed'))
         out.writeframes(b'\0\0' * 8000)
-    calls = []
-    def sidecar(path, body):
-        calls.append((path, body.copy(), Path(body['path']).read_bytes()))
-        return {'ok': True}
-    run = setup(sidecar)
+    cache = MediaCache(tmp_path / 'cache')
+    run = setup(cache)
     response = run(action='voice_note', audio_path=str(audio))
     assert response['ok'], response
-    assert calls[0][0] == '/send-attachment'
-    assert calls[0][1]['kind'] == 'voice'
-    assert calls[0][1]['spaceId'] == 'chat-A'
-    assert b'ftyp' in calls[0][2][:16]
-    assert not Path(calls[0][1]['path']).exists()
+    assert response['reply_directive'] == f"[[audio_as_voice]]\nMEDIA:{response['media_path']}"
+    assert cache.calls[0][:2] == ('audio', '.m4a')
+    assert b'ftyp' in Path(response['media_path']).read_bytes()[:16]
+    assert not any((home / 'voice_cache').iterdir())
     assert not run(action='voice_note', text='hello')['ok']
 
 
-def test_text_voice_note_dispatches_tts_then_sends(tmp_path, monkeypatch):
+def test_text_voice_note_dispatches_tts_then_stages(tmp_path, monkeypatch):
     import wave
-    from pathlib import Path
     monkeypatch.setenv('HERMES_HOME', str(tmp_path / 'home'))
     ctx = Context()
     def dispatch(name, args):
@@ -203,15 +151,28 @@ def test_text_voice_note_dispatches_tts_then_sends(tmp_path, monkeypatch):
             out.writeframes(b'\0\0' * 8000)
         return json.dumps({'success': True, 'file_path': str(output), 'file_paths': [str(output)]})
     ctx.dispatch_tool = dispatch
-    calls = []
-    def sidecar(path, body):
-        calls.append((path, body.copy(), Path(body['path']).read_bytes()))
-        return {'ok': True}
-    register_imessage_tools(ctx, session_provider=lambda: ('photon', 'chat-A'), sidecar=sidecar)
-    response = json.loads(ctx.tool['handler']({'action': 'voice_note', 'text': 'hello'}))
+    cache = MediaCache(tmp_path / 'cache')
+    run = setup(cache, ctx=ctx)
+    response = run(action='voice_note', text='hello')
     assert response['ok'], response
-    assert calls[0][1]['kind'] == 'voice' and b'ftyp' in calls[0][2][:16]
-    assert not Path(calls[0][1]['path']).exists()
+    assert response['reply_directive'].startswith('[[audio_as_voice]]\nMEDIA:')
+    assert b'ftyp' in Path(response['media_path']).read_bytes()[:16]
+
+
+def test_default_media_cache_uses_public_hermes_helpers(tmp_path, monkeypatch):
+    import sys
+    import types
+    calls = []
+    base = types.ModuleType('gateway.platforms.base')
+    base.cache_image_from_bytes = lambda data, ext: calls.append(('image', ext)) or str(tmp_path / f'img{ext}')
+    base.cache_audio_from_bytes = lambda data, ext: calls.append(('audio', ext)) or str(tmp_path / f'aud{ext}')
+    monkeypatch.setitem(sys.modules, 'gateway', types.ModuleType('gateway'))
+    monkeypatch.setitem(sys.modules, 'gateway.platforms', types.ModuleType('gateway.platforms'))
+    monkeypatch.setitem(sys.modules, 'gateway.platforms.base', base)
+    from butler.imessage_tools import _cache_media
+    assert _cache_media('image', b'x', '.png').endswith('img.png')
+    assert _cache_media('audio', b'x', '.m4a').endswith('aud.m4a')
+    assert calls == [('image', '.png'), ('audio', '.m4a')]
 
 
 def test_image_edit_authorizes_input_and_overlay(tmp_path, monkeypatch):
@@ -225,55 +186,11 @@ def test_image_edit_authorizes_input_and_overlay(tmp_path, monkeypatch):
     Image.new('RGB', (3, 3), 'red').save(source)
     outside = tmp_path / 'private.png'
     Image.new('RGB', (1, 1), 'blue').save(outside)
-    run = setup(lambda *a: {'ok': True})
+    run = setup()
     bad = run(action='image_edit', input_path=str(source), operations=[{'op':'overlay', 'path':str(outside)}])
     assert not bad['ok']
     edited = run(action='image_edit', input_path=str(source), operations=[{'op':'grayscale'}])
     assert edited['ok'], edited
     with Image.open(edited['output_path']) as im:
         assert len(set(im.getpixel((0, 0)))) == 1
-    assert not setup(lambda *a: {'ok': True}, lambda: ('telegram', 'x'))(action='image_edit', input_path=str(source), operations=[])['ok']
-
-
-def test_media_real_loopback_sidecar(tmp_path, monkeypatch):
-    import wave
-    from pathlib import Path
-    from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-    from threading import Thread
-    calls = []
-    class Handler(BaseHTTPRequestHandler):
-        def do_POST(self):
-            body = json.loads(self.rfile.read(int(self.headers['Content-Length'])))
-            calls.append((self.path, self.headers.get('X-Hermes-Sidecar-Token'), body, Path(body['path']).read_bytes()))
-            self.send_response(200)
-            self.end_headers()
-            self.wfile.write(b'{"ok":true}')
-        def log_message(self, *args): pass
-    server = ThreadingHTTPServer(('127.0.0.1', 0), Handler)
-    thread = Thread(target=server.serve_forever, daemon=True)
-    thread.start()
-    try:
-        home = tmp_path / 'home'
-        cache = home / 'image_cache'
-        cache.mkdir(parents=True)
-        (home / 'runtime').mkdir()
-        (home / 'runtime/photon-sidecar.json').write_text(json.dumps({'port': server.server_port, 'token':'fixture-token'}))
-        monkeypatch.setenv('HERMES_HOME', str(home))
-        image = cache / 'test.png'
-        image.write_bytes(b'\x89PNG\r\n\x1a\nfixture')
-        audio = cache / 'test.wav'
-        with wave.open(str(audio), 'wb') as out:
-            out.setparams((1, 2, 8000, 0, 'NONE', 'not compressed'))
-            out.writeframes(b'\0\0' * 8000)
-        from butler.expressions import _sidecar
-        run = setup(_sidecar)
-        assert run(action='send_image', path=str(image))['ok']
-        assert run(action='voice_note', audio_path=str(audio))['ok']
-        assert [x[2]['kind'] for x in calls] == ['attachment', 'voice']
-        assert all(x[0] == '/send-attachment' and x[1] == 'fixture-token' and x[2]['spaceId'] == 'chat-A' for x in calls)
-        assert calls[0][3] == image.read_bytes() and b'ftyp' in calls[1][3][:16]
-        assert all(not Path(x[2]['path']).exists() for x in calls)
-    finally:
-        server.shutdown()
-        thread.join()
-        server.server_close()
+    assert not setup(session=lambda: ('telegram', 'x'))(action='image_edit', input_path=str(source), operations=[])['ok']

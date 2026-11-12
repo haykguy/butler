@@ -1,22 +1,53 @@
-"""Native iMessage operations using the gateway's authenticated Photon sidecar.
+"""iMessage media and expression helpers for the active Photon chat.
 
-Adapted from an imessage-native plugin by Hayk and contributors.
-No adapter monkeypatching, home-channel fallback, or server is used.
+Butler never reads Hermes secret stores (such as the Photon sidecar token) and
+never calls a platform sidecar directly. Images and voice notes are staged in
+the Hermes media cache through the public ``gateway.platforms.base`` cache
+helpers and returned as ``MEDIA:`` directives, so the model includes them in
+its normal reply and Hermes' Photon adapter delivers them as attachments.
+Effects and polls have no public plugin route yet and fail closed.
 Message-targeted actions remain disabled until the backend proves membership.
 """
 import json
 
 
-from .expressions import _session, _sidecar, _EFFECTS
+from .expressions import _session, _EFFECTS, EFFECTS_UNAVAILABLE
+
+POLLS_UNAVAILABLE = ('iMessage polls are unavailable: Hermes has no public plugin route for them yet '
+                     '(pending a send_poll verb on ctx.platform_actions). Ask the question as a normal reply.')
+
+
+def _cache_media(kind, data, ext):
+    """Write media bytes into the Hermes media cache via the public helpers."""
+    from gateway.platforms.base import cache_audio_from_bytes, cache_image_from_bytes
+    if kind == 'image':
+        return cache_image_from_bytes(data, ext)
+    return cache_audio_from_bytes(data, ext)
+
+
+def _media_reply(path, *, voice=False, caption=None):
+    directive = f'MEDIA:{path}'
+    lines = (['[[audio_as_voice]]'] if voice else []) + [directive]
+    payload = {
+        'ok': True,
+        'delivery': 'reply_attachment',
+        'media_path': str(path),
+        'reply_directive': '\n'.join(lines),
+        'instruction': ('Not sent yet. To deliver it, include reply_directive verbatim on its own line(s) '
+                        'in your reply to this chat; Hermes attaches the file.'),
+    }
+    if caption:
+        payload['caption'] = caption
+    return payload
 
 _ACTIONS = ('capabilities', 'react', 'reply', 'edit', 'unsend', 'poll', 'effect',
             'voice_note', 'send_image', 'card', 'contact_card', 'background',
             'thread', 'image_edit')
 
 
-def register_imessage_tools(ctx, *, session_provider=None, sidecar=None):
+def register_imessage_tools(ctx, *, session_provider=None, media_cache=None):
     session_provider = session_provider or _session
-    sidecar = sidecar or _sidecar
+    media_cache = media_cache or _cache_media
 
     def handle(args, **kwargs):
         def result(**values):
@@ -35,7 +66,8 @@ def register_imessage_tools(ctx, *, session_provider=None, sidecar=None):
             return result(ok=False, error='chat_id must match the active chat')
         if action == 'capabilities':
             return result(ok=True, membership_verified=False,
-                          note='Media files are limited to Hermes image_cache and plugin-data/butler/media; voice accepts audio_path or text via configured Hermes TTS. Message targets, thread history, cards, backgrounds and contact cards are unavailable.')
+                          delivery='reply_attachment',
+                          note='send_image and voice_note stage the file and return a MEDIA: directive to include in your reply. Media inputs are limited to Hermes image_cache and plugin-data/butler/media; voice accepts audio_path or text via configured Hermes TTS. Effects, polls, message targets, thread history, cards, backgrounds and contact cards are unavailable.')
         if action in ('react', 'reply', 'edit', 'unsend') or (action == 'voice_note' and args.get('reply_to_message_id')):
             return result(ok=False, error='message membership cannot be verified safely')
         if action == 'image_edit':
@@ -73,17 +105,12 @@ def register_imessage_tools(ctx, *, session_provider=None, sidecar=None):
                 return result(ok=False, error='caption must be text')
             try:
                 with snapshot(args.get('path'), 'image') as staged:
-                    body = {'spaceId': chat, 'path': str(staged), 'kind': 'attachment'}
-                    if caption:
-                        body['caption'] = caption
-                    response = sidecar('/send-attachment', body)
-                if not isinstance(response, dict) or not isinstance(response.get('ok'), bool):
-                    return result(ok=False, error='invalid Photon sidecar response')
-                return json.dumps(response, ensure_ascii=False)
+                    cached = media_cache('image', staged.read_bytes(), staged.suffix.lower())
+                return json.dumps(_media_reply(cached, caption=caption or None), ensure_ascii=False)
             except ValueError as exc:
                 return result(ok=False, error=str(exc))
             except Exception:
-                return result(ok=False, error='Photon sidecar unavailable or operation unsupported')
+                return result(ok=False, error='Hermes media cache unavailable')
         if action == 'voice_note':
             from pathlib import Path
             from .imessage_media import snapshot
@@ -100,49 +127,28 @@ def register_imessage_tools(ctx, *, session_provider=None, sidecar=None):
                     return json.dumps(prepared, ensure_ascii=False)
                 output = Path(prepared['path'])
                 try:
-                    response = sidecar('/send-attachment', {'spaceId': chat, 'path': str(output),
-                                       'kind': 'voice', 'name': prepared['name'],
-                                       'mimeType': prepared['mime_type']})
+                    cached = media_cache('audio', output.read_bytes(), output.suffix.lower())
                 finally:
                     output.unlink(missing_ok=True)
                     output.parent.rmdir()
-                if not isinstance(response, dict) or not isinstance(response.get('ok'), bool):
-                    return result(ok=False, error='invalid Photon sidecar response')
-                return json.dumps(response, ensure_ascii=False)
+                return json.dumps(_media_reply(cached, voice=True), ensure_ascii=False)
             except ValueError as exc:
                 return result(ok=False, error=str(exc))
             except Exception:
-                return result(ok=False, error='voice conversion or Photon sidecar unavailable')
+                return result(ok=False, error='voice conversion or Hermes media cache unavailable')
         if action == 'thread':
             return result(ok=False, error='authenticated thread event history unavailable')
         if action == 'card':
             return result(ok=False, error='interactive cards unavailable: external card service and authenticated callback are not configured or integrated')
         if action in ('background', 'contact_card'):
-            return result(ok=False, error='operation unavailable: Photon sidecar does not implement this route')
-        body = {'spaceId': chat}
+            return result(ok=False, error='operation unavailable: no public Hermes route exists for it')
         if action == 'poll':
-            title, options = args.get('title'), args.get('options')
-            if not isinstance(title, str) or not title.strip() or not isinstance(options, list) or len(options) < 2 or any(not isinstance(x, str) or not x.strip() for x in options):
-                return result(ok=False, error='title and at least two nonempty options required')
-            body.update(title=title, options=options)
-            path = '/send-poll'
-        elif action == 'effect':
-            text, effect = args.get('text'), args.get('effect')
-            if not isinstance(text, str) or not text.strip() or not isinstance(effect, str) or effect not in _EFFECTS:
-                return result(ok=False, error='nonempty text and valid effect required')
-            body.update(text=text, effect=effect)
-            path = '/send-effect'
-        else:
-            return result(ok=False, error='unsupported action')
-        try:
-            response = sidecar(path, body)
-            if not isinstance(response, dict) or not isinstance(response.get('ok'), bool):
-                return result(ok=False, error='invalid Photon sidecar response')
-            return json.dumps(response, ensure_ascii=False)
-        except Exception:
-            return result(ok=False, error='Photon sidecar unavailable or operation unsupported')
+            return result(ok=False, error=POLLS_UNAVAILABLE)
+        if action == 'effect':
+            return result(ok=False, error=EFFECTS_UNAVAILABLE)
+        return result(ok=False, error='unsupported action')
 
-    description = ('Native iMessage operations in the active Photon chat. Media inputs must be regular, non-hardlinked files under HERMES_HOME/image_cache or HERMES_HOME/plugin-data/butler/media, with no symlinks and supported media extensions. These directories are a sharing boundary, not proof of user consent. Voice notes accept text through configured Hermes TTS or an authorized audio_path. Targeted actions and thread history fail closed; cards, backgrounds and contact cards are unavailable.')
+    description = ('iMessage helpers for the active Photon chat. send_image and voice_note do not send by themselves: they stage the file in the Hermes media cache and return a MEDIA: reply_directive that you must include in your reply so Hermes delivers it as an attachment. Media inputs must be regular, non-hardlinked files under HERMES_HOME/image_cache or HERMES_HOME/plugin-data/butler/media, with no symlinks and supported media extensions. These directories are a sharing boundary, not proof of user consent. Voice notes accept text through configured Hermes TTS or an authorized audio_path. Effects and polls have no public Hermes route yet and fail closed; targeted actions and thread history fail closed; cards, backgrounds and contact cards are unavailable.')
     properties = {'action': {'type': 'string', 'enum': list(_ACTIONS)},
                   'chat_id': {'type': 'string'}, 'message_id': {'type': 'string'},
                   'reply_to_message_id': {'type': 'string'}, 'text': {'type': 'string'},
