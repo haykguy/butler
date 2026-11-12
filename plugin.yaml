@@ -1,5 +1,5 @@
 name: butler
-version: 0.4.0
+version: 0.5.0
 description: "Butler — the proactive personal assistant for Hermes Agent. Messages you first, tracks commitments and daily non-negotiables, follows up on timing the model chooses itself (no fixed cadence), with live local-time awareness and privacy-first guardrails."
 author: Butler contributors
 kind: standalone

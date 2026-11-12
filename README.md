@@ -155,7 +155,7 @@ Most accountability tools confuse **rudeness** with **persistence**. Butler give
 
 ## 5. Architectural Overview & Core Invariants
 
-Butler (`v0.4.0`, `requires_hermes: ">=0.23.1"`) is a unified **Hermes Agent + Hermes Desktop** standalone plugin engineered against **public Hermes SDK surfaces** (`hermes_cli/data/plugin_api.json`).
+Butler (`v0.5.0`, `requires_hermes: ">=0.23.1"`) is a unified **Hermes Agent + Hermes Desktop** standalone plugin engineered against **public Hermes SDK surfaces** (`hermes_cli/data/plugin_api.json`).
 
 <p align="center">
   <img src="assets/system-architecture.svg" alt="Butler System Architecture across Hermes Core, Butler Engine, and Profile Storage" width="100%"/>
@@ -285,6 +285,7 @@ Phone calling is **OFF by default** (`phoneEnabled: false`, `ownerRingEnabled: f
 - **Owner Ring Safety Gates & Verbal Kill-Switch:** `ring_owner` enforces `Policy.evaluate_owner_ring()` (pause, enablement, and Quiet Hours unless `quietHoursBreakthrough: true`), rolling `maxRingsPerHour` (default `3`), `minRingGapSeconds` (default `120s`), and a persistent `phone_stopped` kill-switch. Saying *"stop calling me"* on a live call (`is_verbal_stop_request`) or calling `butler_phone(action='stop_escalation')` latches `phone_stopped=True` immediately; only a human in Desktop Control Center or `python -m butler.phone resume` can clear it.
 - **Double-Gated Outbound Calls (`SHA-256` + `24h` TTL):** Third-party calls require `draft_call` -> explicit human approval (Desktop Control Center **Approve SHA-256** or `python -m butler.phone approve <plan_id>`) -> `place_call`. `approve` is **never** an LLM tool action. Both `PhoneStore.place_call()` (before room dispatch) and `PhoneStore.verify_outbound_ready_for_sip()` (inside `voice_worker` right before dialing SIP) verify `status == 'approved'`, canonical plan/script `SHA-256` match, `24h` approval TTL, emergency/premium number hard-blocklist (`911`/`999`/`112`/`988`/`119`/`000`/`+1900*`/`+1976*`/`+449*`), mandatory first-sentence AI disclosure, and a single-active-call lock.
 - **End-to-End Phone Number Masking:** Raw E.164 numbers are stored locally for SIP dialing only; tool outputs, pre-LLM `[Butler Phone Calling]` awareness blocks, and Desktop `/state` & `/settings` responses return masked numbers (`+1******1234`) only.
+- **Known issues / limitations (phone, v0.5.0):** Phone calling is opt-in and does nothing until you enable it in Desktop *and* configure `LIVEKIT_URL`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET` and `LIVEKIT_SIP_TRUNK_ID` (a LiveKit Cloud or self-hosted `livekit-sip` outbound trunk) through Hermes secrets. Without the optional voice worker running (`pip install '.[voice]'`, `python -m butler.voice_worker start`, plus `OPENAI_API_KEY`), a dispatched room has no agent to speak on it. Butler only calls LiveKit's Twirp endpoints (`AgentDispatchService/CreateDispatch`, `SIP/CreateSIPParticipant`); it never touches the Photon sidecar or Hermes runtime/secret files. The phone path has unit tests but has not yet been exercised end-to-end against a real LiveKit SIP trunk and carrier call.
 
 ---
 
@@ -400,7 +401,7 @@ butler/
 
 ```bash
 # 1. Run the Python test suite (unit, escalation, routes, watchers, awareness, integration)
-#    Expected at v0.4.0: 227 passed, 1 skipped
+#    Expected at v0.5.0: 250 passed, 1 skipped
 PYTHONPATH=. python3 -m pytest tests -q
 
 # 2. Validate Hermes Desktop ESM bundle syntax

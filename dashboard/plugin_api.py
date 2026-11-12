@@ -581,6 +581,8 @@ def state():
 @_register_route('put', '/settings')
 def save_settings(data: dict):
     directory = Path(plugin_data_dir('butler'))
+    # Round-tripping the masked ownerPhone from GET must keep the raw E.164 on disk.
+    data = _merge_masked_owner_phone(_settings.load(directory), data)
     try:
         saved = _settings.save(directory, data)
     except ValueError as exc:
@@ -589,7 +591,7 @@ def save_settings(data: dict):
         _notifications.apply_system_controls_to_hermes(
             saved, config_loader=_config_loader, config_saver=_config_saver,
         )
-    return saved
+    return _public_settings(saved)
 
 
 @_register_route('post', '/detect-timezone')
