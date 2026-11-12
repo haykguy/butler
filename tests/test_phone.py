@@ -139,7 +139,7 @@ def test_mint_jwt_and_twirp_post_stdlib():
 def test_double_gated_outbound_flow_sha256_ttl_and_active_lock(tmp_path):
     _enable_phone(tmp_path)
     store = PhoneStore(tmp_path)
-    now = datetime(2026, 11, 11, 18, 0, tzinfo=UTC)
+    now = datetime.now(UTC).replace(microsecond=0)  # CLI approval uses the real clock; a fixed date expires after 24h
 
     # Read-only status creates zero SQLite files on disk.
     snap = store.status_summary(now=now, env_override=FAKE_ENV)
