@@ -84,19 +84,6 @@ def _open_default_route_registry(db_path):
 RouteRegistry = _open_default_route_registry
 
 
-def _call_today_morning_checkin(now, effective_timezone='UTC', *, hour=8, minute=30, settings=None):
-    try:
-        from . import followup as _followup
-        return _followup.today_morning_checkin(
-            now, effective_timezone, hour=hour, minute=minute, settings=settings,
-        )
-    except ImportError:
-        tz = ZoneInfo(effective_timezone or 'UTC')
-        loc = now.astimezone(tz)
-        morning = datetime.combine(loc.date(), time(hour, minute), tzinfo=tz)
-        return morning.astimezone(timezone.utc)
-
-
 def _call_next_followup_step(
     item, now, settings, *, effective_timezone='UTC', available_channels=('check_in', 'push'),
 ):
@@ -110,37 +97,13 @@ def _call_next_followup_step(
             available_channels=available_channels,
         )
     except ImportError:
+        # No built-in cadence: wake now, then wait for the model to reschedule or close the item.
         raw_stage = item.get('stage', item.get('followup_stage', -1))
-        stage = int(-1 if raw_stage is None else raw_stage) + 1
-        interval = item.get('interval_seconds')
-        kind = item.get('kind') or 'commitment'
-        if interval is not None:
-            due = item.get('due_at') or now
-            step = timedelta(seconds=int(interval))
-            steps = max(1, (now - due) // step + 1)
-            next_due = due + steps * step
-            next_status = 'active'
-        elif kind == 'non_negotiable':
-            next_due = now + timedelta(hours=4)
-            next_status = 'active'
-        else:
-            persistence = (settings or {}).get('persistence', 'Occasional')
-            max_stages = {'Minimal': 0, 'Occasional': 1, 'Regular': 2, 'Persistent': 3}.get(persistence, 1)
-            if stage <= max_stages:
-                next_due = now + timedelta(hours=2)
-                next_status = 'active'
-            else:
-                next_due = None
-                next_status = 'submitted'
         return _FallbackFollowupDecision(
-            should_wake=True,
-            actions=('check_in',),
-            next_stage=stage,
-            next_due_at=next_due,
-            next_status=next_status,
-            urgency='normal',
-            heads_up=False,
-            reason='due',
+            should_wake=True, actions=('check_in',),
+            next_stage=int(-1 if raw_stage is None else raw_stage) + 1,
+            next_due_at=None, next_status='submitted', urgency='normal', heads_up=False,
+            reason='awaiting_model_reschedule',
         )
 
 
@@ -195,7 +158,6 @@ def _call_build_action_first_wake_prompt(items, decisions, settings, *, now, eff
         return '\n'.join(lines)
 
 
-today_morning_checkin = _call_today_morning_checkin
 next_followup_step = _call_next_followup_step
 coalesce_due_batch = _call_coalesce_due_batch
 build_action_first_wake_prompt = _call_build_action_first_wake_prompt
@@ -514,7 +476,7 @@ class Runner:
                 local_date = local_time(now, effective_timezone).date().isoformat()
                 reset_count = 0
                 if hasattr(store, 'reset_daily_non_negotiables'):
-                    morning_due = today_morning_checkin(now, effective_timezone, settings=settings)
+                    morning_due = now  # no fixed morning time: reopened non-negotiables wake the model, which picks the time
                     reset_count = int(store.reset_daily_non_negotiables(local_date, morning_due) or 0)
 
                 claimed = Scheduler(store, batch_size=10, lease_seconds=300).claim(now)

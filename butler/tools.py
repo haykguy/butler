@@ -55,40 +55,17 @@ def _call_compute_initial_schedule(
             interval_seconds=interval_seconds,
         )
     except ImportError:
-        tz = ZoneInfo(effective_timezone or 'UTC')
-        loc = now.astimezone(tz)
+        # No built-in cadence: explicit due_at, else due now so the model is woken and chooses the time.
         resolved_interval = interval_seconds
+        if kind == 'watch' and resolved_interval is None:
+            resolved_interval = 900
         if due_at is not None:
             resolved_due = due_at
-        elif deadline_at is not None:
-            lead = deadline_at - timedelta(hours=2)
-            resolved_due = lead if lead > now else min(deadline_at, now + timedelta(minutes=15))
-        elif kind == 'non_negotiable':
-            morning = datetime.combine(loc.date(), time(8, 30), tzinfo=tz)
-            if loc >= morning:
-                evening = datetime.combine(loc.date(), time(19, 0), tzinfo=tz)
-                resolved_due = (
-                    evening.astimezone(timezone.utc)
-                    if loc < evening
-                    else (morning + timedelta(days=1)).astimezone(timezone.utc)
-                )
-            else:
-                resolved_due = morning.astimezone(timezone.utc)
         elif kind == 'watch':
-            resolved_due = now + timedelta(seconds=resolved_interval or 300)
-            if resolved_interval is None:
-                resolved_interval = 300
-        elif kind == 'check_in':
-            resolved_due = now + timedelta(hours=4)
+            resolved_due = now + timedelta(seconds=resolved_interval)
         else:
-            resolved_due = now + timedelta(hours=2)
-        if kind == 'watch' and resolved_interval is None:
-            resolved_interval = 300
-        return {
-            'due_at': resolved_due,
-            'deadline_at': deadline_at,
-            'interval_seconds': resolved_interval,
-        }
+            resolved_due = now
+        return {'due_at': resolved_due, 'deadline_at': deadline_at, 'interval_seconds': resolved_interval}
 
 
 capture_bound_turn_route = _call_capture_bound_turn_route
@@ -303,7 +280,7 @@ def register_tools(
         'name': 'butler_create',
         'description': (
             'Record a responsibility, daily non-negotiable, proactive check-in, file watch, or open loop '
-            'authorized by the user. Omit due_at to auto-schedule from kind, deadline_at, and user cadence.'
+            'authorized by the user. Omit due_at to be woken right away and choose the time yourself; you own follow-up timing (reschedule with butler_manage snooze). Persistence settings are preference hints, not schedules.'
         ),
         'parameters': {
             'type': 'object',

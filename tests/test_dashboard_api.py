@@ -389,7 +389,7 @@ def test_desktop_plugin_js_passes_admission_lint_and_sync():
         'ctx.setInterval',
         'Non-Negotiables & Commitments',
         'Quick Setup',
-        '75m',
+        'Keeps going until done',
     ):
         assert expected in src, f'Missing expected UI contract token: {expected}'
 

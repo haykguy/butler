@@ -73,7 +73,7 @@ Instead of waiting around for your next prompt, Butler remembers what matters to
 Real life doesn't run on a static hourly timer. Butler adjusts how closely it follows up to how urgent things are:
 
 - **Watches:** Ask Butler to watch a local file (exact absolute path, no symlinks) or a JSON value in it. Its background runner polls it on an interval and wakes your assistant when it changes, so it can act and tell you what it handled. (Butler has **no webhook receiver**; watches are polled, not pushed.)
-- **Escalating follow-ups:** As a deadline gets close, or with the Persistent setting, check-ins tighten (for example 75m → 45m → 30m for unfinished daily non-negotiables). For urgent follow-ups the wake prompt also allows the assistant to add a short spoken check-in with Hermes's `text_to_speech` tool where the channel supports it. Butler does **not** place phone calls.
+- **Model-driven follow-ups:** There is no fixed cadence in the code. After every wake, the assistant decides whether to nudge, stay silent, or let go, and sets its own next touch with `butler_manage` snooze (a minute for something live, days when it can wait). Items it does not reschedule are marked *awaiting your decision* in its context and do not wake again by themselves. The Tone and Persistence settings are preference hints in the prompt, not timers. For urgent follow-ups the wake prompt also allows the assistant to add a short spoken check-in with Hermes's `text_to_speech` tool where the channel supports it. Butler does **not** place phone calls.
 - **Smart anti-spam coalescing:** Multiple simultaneous updates are grouped into one clear, high-signal reach-out rather than blowing up your phone with back-to-back pings.
 
 ---
@@ -116,7 +116,7 @@ Most accountability tools confuse **rudeness** with **persistence**. Butler give
 | :--- | :--- | :--- |
 | **You commit to sending a Q4 packet by Friday** | Buried in chat history; forgotten as soon as you type `/new`. | Tracked durably, prepped ahead of the deadline, and followed up proactively until done. |
 | **A file you asked it to watch changes** | Sits unseen until you manually open a chat and ask. | Notices on its next poll, wakes your assistant to handle it, and texts you what it did. |
-| **An urgent deadline is close to slipping** | Silence—unless you remember to check yourself. | Tightens its follow-up cadence and, where your channel supports it, can add a short spoken check-in. |
+| **An urgent deadline is close to slipping** | Silence—unless you remember to check yourself. | Decides for itself how soon to follow up and how loud to be, and, where your channel supports it, can add a short spoken check-in. |
 | **You reply the next morning after 11 hours** | Responds as if 2 seconds passed or guesses wildly at the time. | Sees *"8:14 AM CST · 11h 12m since previous message"* and picks up your morning naturally. |
 | **Your main AI provider hits a temporary rate limit** | Spams warning banners on every reply while the backup model works fine. | **Quiet Human Mode** silences repetitive fallback/tool clutter so your thread stays clean. |
 | **You text back *"Done, sent it over!"*** | Replies with a 3-sentence corporate paragraph. | Marks the commitment complete with a short reply and moves on. |
@@ -154,7 +154,7 @@ Butler (`v0.3.0`, `requires_hermes: ">=0.23.1"`) is a unified **Hermes Agent + H
 
 1. **Public Surfaces Only, No Monkey-Patching:** `hermes plugins validate .` passes with no warnings: no runtime rebinds of Hermes core, no private core imports, a clean security scan, and it runs under the plugin host (`plugins.isolation: host`). Butler uses public surfaces only (`plugins.plugin_storage.plugin_data_dir`, `gateway.session_context.get_session_env`, `hermes_constants.get_hermes_home`, `hermes_cli.config.{load_config, save_config}`, `ctx.*`).
 2. **Action-First Autonomy Over Static Reminders:** Rather than firing dumb text strings on a cron loop or chaining secondary "judge" prompts that leak deliberation tokens, Butler wakes the primary Hermes agent with structured responsibility or watcher context and capability-gated tools (`butler_create`, `butler_manage`, `butler_controls`, `butler_expression`, `butler_imessage`) so the model acts before reaching out.
-3. **Multi-Stage Escalation & Polled Watches:** Follow-up cadence scales from light text check-ins and pre-deadline heads-ups to tighter persistent cadences, polled file/JSON watcher wakes, and an optional spoken (TTS) check-in hint for urgent items—governed by anti-burst batch coalescing, Quiet Hours, and atomic daily wake caps. There is no webhook endpoint and no phone calling.
+3. **Multi-Stage Escalation & Polled Watches:** The assistant itself chooses follow-up timing and intensity each wake (no built-in intervals), with polled file/JSON watcher wakes, and an optional spoken (TTS) check-in hint for urgent items—governed by anti-burst batch coalescing, Quiet Hours, and atomic daily wake caps. There is no webhook endpoint and no phone calling.
 4. **Fail-Closed Security & Per-Profile Isolation:** Every SQLite store and settings file resolves dynamically inside `plugin_data_dir('butler')` (`~/.hermes/profiles/<profile>/plugin-data/butler/`), and any unauthenticated route or spoofing vector (`HERMES_SESSION_KEY`) fails closed.
 
 ---
@@ -248,8 +248,8 @@ stateDiagram-v2
         BEGIN IMMEDIATE write lock
         Monotonic fencing claim_token
     end note
-    leased --> active : advance stage / next due_at (recurring or multi-stage cadence)
-    leased --> submitted : final one-off check-in injected
+    leased --> active : advance stage; recurring items keep their interval, others wait for the model to reschedule
+    leased --> submitted : check-in injected; awaiting the model's snooze/complete/stop
     leased --> active : fail_work() [exponential backoff 30s..3600s]
     leased --> leased : crash recovery after lease_until expires
     active --> paused : pause() / snooze()
@@ -308,7 +308,7 @@ butler/
 │   └── media/                       # Catalog banner and Desktop page screenshot
 ├── photon-extra/                    # Unwired Photon sidecar module (contact card / background); not installed or enabled
 ├── butler/
-│   ├── followup.py                  # Tone & Persistence profiles, auto-cadence, escalation & batch coalescing
+│   ├── followup.py                  # Tone & Persistence preference hints, quiet-hours gate, batch coalescing, wake prompt
 │   ├── runner.py                    # Background wake runner, watcher polling & immediate trigger execution
 │   ├── routes.py                    # Authenticated route registry for verified proactive delivery
 │   ├── store.py                     # Durable SQLite ResponsibilityStore with BEGIN IMMEDIATE fenced leases

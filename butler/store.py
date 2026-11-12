@@ -236,7 +236,7 @@ class ResponsibilityStore:
 
     def snooze(self, item_id, until):
         result = self.db.execute(
-            "UPDATE responsibilities SET due_at=?,claim_token=NULL,claim_until=NULL,generation=generation+1 WHERE id=? AND status IN ('active','paused')",
+            "UPDATE responsibilities SET due_at=?,status=CASE WHEN status='submitted' THEN 'active' ELSE status END,claim_token=NULL,claim_until=NULL,generation=generation+1 WHERE id=? AND status IN ('active','paused','submitted')",
             (stamp(until), item_id),
         )
         return result.rowcount == 1

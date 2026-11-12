@@ -24,24 +24,24 @@ const TONE_DESCRIPTIONS = {
 
 const PERSISTENCE_DETAILS = {
   Minimal: {
-    badge: '1 gentle check-in',
-    nonNegotiable: 'Single morning check-in around 8:30 AM local; steps back for the rest of the day.',
-    commitment: 'One reminder at the scheduled time, then waits for you.',
+    badge: 'Light touch',
+    nonNegotiable: 'Butler decides when to check in, and does so sparingly. It lets go early.',
+    commitment: 'Butler follows up rarely, only when it clearly helps.',
   },
   Occasional: {
-    badge: 'Up to 2 nudges · ~3h spacing',
-    nonNegotiable: 'Morning check-in + one mid-afternoon follow-up (~3h spacing) if still open.',
-    commitment: 'Initial check-in + one polite follow-up ~3h later.',
+    badge: 'When something is open',
+    nonNegotiable: 'Butler picks the timing and follows up when an item is genuinely still open, then steps back if you are busy.',
+    commitment: 'Butler chooses when to come back based on how you respond.',
   },
   Regular: {
-    badge: 'Up to 4 nudges · 2h → 90m',
-    nonNegotiable: 'Morning check-in, then structured follow-ups every 2h → 90m until checked off.',
-    commitment: 'Follows up across 3–4 stages (2h → 90m) when an item slips.',
+    badge: 'Steady follow-through',
+    nonNegotiable: 'Butler keeps steady follow-through, adjusting spacing to how you respond and what is at stake.',
+    commitment: 'Butler decides each next touch itself and keeps at it while the item is open.',
   },
   Persistent: {
-    badge: 'Escalating 75m → 45m → 30m until done',
-    nonNegotiable: 'Keeps following up on an escalating 75m → 45m → 30m cadence until every daily non-negotiable is checked off (respecting quiet hours & daily wake cap).',
-    commitment: 'Actively pursues open commitments (75m → 45m → 30m) and preps next steps until resolved.',
+    badge: 'Keeps going until done',
+    nonNegotiable: 'Butler keeps pursuing open items until done, paused or snoozed, going tighter and louder as stakes rise, and stops if it would annoy rather than help (respecting quiet hours & daily wake cap).',
+    commitment: 'Butler decides when to push again and preps next steps until resolved. It picks the timing, not a fixed schedule.',
   },
 };
 
@@ -1522,7 +1522,7 @@ function Page({ ctx }) {
         h('div', { style: styles.cardHeader },
           h('div', null,
             h('h2', { style: styles.cardTitle }, 'How Hermes Follows Up'),
-            h('p', { style: styles.cardHint }, 'Tune coaching voice and how persistently Hermes nudges until daily non-negotiables are done.'),
+            h('p', { style: styles.cardHint }, 'Tune coaching voice and how persistent Butler should be. Butler decides the timing itself; these are preferences, not schedules.'),
           ),
         ),
 
@@ -1890,7 +1890,7 @@ function Page({ ctx }) {
           ),
         ),
         h('p', { style: { margin: '-4px 0 12px', fontSize: 12, color: 'var(--muted-foreground, #6e776f)' } },
-          `Leave "First Check-in" blank to let Hermes auto-choose follow-up timing in ${effTz} based on your ${(prefs && prefs.persistence) || 'Occasional'} cadence.`,
+          `Leave "First Check-in" blank and Butler will wake right away and choose the follow-up timing itself in ${effTz} (your ${(prefs && prefs.persistence) || 'Occasional'} setting is a preference hint, not a schedule).`,
         ),
 
         h('div', { style: { marginBottom: 12 } },

@@ -396,10 +396,10 @@ def _fallback_compute_schedule(kind: str, now: datetime, settings: dict, eff_tz:
             interval_seconds=interval_seconds,
         )
     return {
-        'due_at': due_at or (now + timedelta(hours=1)),
+        'due_at': due_at or now,
         'deadline_at': deadline_at,
         'interval_seconds': interval_seconds,
-        'schedule_reason': 'fallback_1h',
+        'schedule_reason': 'due_now_model_decides',
     }
 
 
@@ -510,11 +510,7 @@ def state():
                 needs_reset = stale is not None
 
         if needs_reset and _store is not None:
-            morning_fn = getattr(_followup, 'today_morning_checkin', None)
-            morning_due = (
-                morning_fn(now, tz_for_calc, settings=settings)
-                if callable(morning_fn) else now
-            )
+            morning_due = now  # no fixed morning time; the model picks the next touch
             with _store.ResponsibilityStore(db_path) as st:
                 reset_count = st.reset_daily_non_negotiables(local_today_iso, morning_due)
                 if reset_count > 0:
@@ -760,7 +756,8 @@ def responsibility_action(item_id: str, payload: dict):
                 if raw_until == 'tomorrow_morning' or raw_mins == 'tomorrow_morning':
                     local_now = now.astimezone(_safe_zone(tz_name))
                     tmr = local_now.date() + timedelta(days=1)
-                    cand = datetime(tmr.year, tmr.month, tmr.day, 8, 30, 0, tzinfo=_safe_zone(tz_name)).astimezone(UTC)
+                    # user explicitly asked for 'tomorrow morning' in the UI: start of day, quiet-hours aware
+                    cand = datetime(tmr.year, tmr.month, tmr.day, 9, 0, 0, tzinfo=_safe_zone(tz_name)).astimezone(UTC)
                     shift_fn = getattr(_followup, 'shift_out_of_quiet_hours', None)
                     target_dt = shift_fn(cand, settings, tz_name) if callable(shift_fn) else cand
                 elif raw_mins not in (None, ''):

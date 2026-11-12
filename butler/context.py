@@ -315,6 +315,8 @@ def _render_responsibilities_block(
             when_parts.append(f"due {local_time(due_dt, zone).strftime('%Y-%m-%d %H:%M')}")
         if deadline_dt is not None:
             when_parts.append(f"deadline {local_time(deadline_dt, zone).strftime('%Y-%m-%d %H:%M')}")
+        if status == 'submitted':
+            when_parts.append('AWAITING YOUR DECISION: no next touch is scheduled, snooze/complete/stop it')
         meta_str = f" ({', '.join(when_parts)})" if when_parts else ''
         commitments.append(((status_rank, sort_ts, nudge_rank), f'{title}{meta_str}{id_tag}'))
 
@@ -340,8 +342,8 @@ def _render_responsibilities_block(
 
     directive_line = (
         'Proactive assistant directive: When the user shares a daily non-negotiable, commitment, task to follow up on, '
-        f'or open loop, record it via butler_create (you may omit due_at to let Butler auto-schedule based on persistence={persistence}). '
-        'When the user finishes or reschedules an item, update it immediately via butler_manage so Desktop UI and follow-up nudges stay in sync.'
+        f'or open loop, record it via butler_create (omit due_at to be woken right away, or pick the time yourself; persistence={persistence} is only an owner preference hint, never a schedule). '
+        'You own follow-up timing: after every nudge or reply, decide whether and when to come back and set it with butler_manage snooze (until=...). Items marked AWAITING YOUR DECISION will not wake again until you do. When the user finishes or reschedules an item, update it immediately via butler_manage.'
     )
     return [nn_line, comm_line, directive_line]
 
