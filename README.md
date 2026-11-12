@@ -26,16 +26,12 @@
 
 ## 🎬 Watch Butler in Action
 
-> *"Most agents wait. Butler follows through."*
-
-https://github.com/haykguy/butler/releases/download/v0.3.0/Butler_demo_v8_FULL.mp4
-
 <p align="center">
   <a href="https://github.com/haykguy/butler/releases/download/v0.3.0/Butler_demo_v8_FULL.mp4">
-    <img src="assets/BUTLER_ending_screen.png" alt="Butler Demo Video — Most agents wait. Butler follows through." width="100%"/>
+    <img src="assets/BUTLER_ending_screen.png" alt="Butler Demo Video" width="100%"/>
   </a>
   <br/>
-  <em>▶️ <b><a href="https://github.com/haykguy/butler/releases/download/v0.3.0/Butler_demo_v8_FULL.mp4">Watch the full 1080p demo walkthrough video</a></b> (1m 42s · Luigi Boccherini Minuet · Hermes Plugin Store)</em>
+  <em>▶️ <b><a href="https://github.com/haykguy/butler/releases/download/v0.3.0/Butler_demo_v8_FULL.mp4">Watch the full 1080p demo walkthrough video</a></b></em>
 </p>
 
 ---
