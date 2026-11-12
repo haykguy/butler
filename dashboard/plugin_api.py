@@ -501,7 +501,7 @@ def state():
                     """
                     SELECT 1 FROM responsibilities
                     WHERE kind='non_negotiable'
-                      AND status IN ('completed', 'submitted')
+                      AND status IN ('completed', 'submitted', 'queued')
                       AND (completed_day IS NULL OR completed_day != ?)
                     LIMIT 1
                     """,
@@ -872,6 +872,11 @@ def enable_proactive(payload: dict | None = None):
     chosen_tz = str(body.get('timezone') or '').strip() or updated.get('timezone') or _detect_sys_tz() or 'UTC'
     updated['timezone'] = chosen_tz
 
+    if 'displayName' in body and body['displayName'] is not None:
+        if not isinstance(body['displayName'], str):
+            raise HTTPException(status_code=422, detail='Invalid displayName')
+        updated['displayName'] = body['displayName'].strip()
+
     if 'tone' in body and body['tone']:
         updated['tone'] = body['tone']
     if 'persistence' in body and body['persistence']:
@@ -989,6 +994,16 @@ def check_in_now(payload: dict | None = None):
     db_path = directory / 'responsibilities.sqlite3'
     now = _now()
 
+    settings = _settings.load(directory) if _settings is not None else {}
+    if settings.get('paused'):
+        return {
+            'ok': False,
+            'triggered': False,
+            'mode': 'paused',
+            'reason': 'policy_blocked',
+            'detail': 'Check-ins are paused — resume Butler first.',
+        }
+
     live_runner = _find_active_runner(directory)
     route_id = None
     reg_cls = getattr(_routes, 'RouteRegistry', None)
@@ -1001,7 +1016,7 @@ def check_in_now(payload: dict | None = None):
 
     if live_runner is not None and hasattr(live_runner, 'trigger_now'):
         res = live_runner.trigger_now(item_id=item_id)
-        if res.get('triggered'):
+        if res.get('triggered') or (res.get('ok') and res.get('injected', 0) > 0):
             return {
                 'ok': True,
                 'triggered': True,
@@ -1009,21 +1024,39 @@ def check_in_now(payload: dict | None = None):
                 'detail': f"Check-in sent now ({res.get('woken_items', 1)} item(s)).",
                 'result': res,
             }
-        reason = res.get('reason') or 'not_triggered'
-        if reason in ('policy_blocked', 'route_missing', 'injection_failed'):
-            detail_map = {
-                'policy_blocked': 'Blocked by wake guardrails (check pause, quiet hours, daily limit, or notifications switch).',
-                'route_missing': 'No active chat session route registered yet — send one message in chat first.',
-                'injection_failed': 'Gateway injection is disabled or unavailable — click Enable Background Wakes first.',
-            }
+        reason = res.get('reason') or ''
+        err = res.get('error') or ''
+        if reason == 'not_found' or err == 'responsibility not found':
+            raise HTTPException(status_code=404, detail='Responsibility not found')
+        if err == 'Butler is paused':
+            reason = 'policy_blocked'
+        elif err == 'no authenticated route available' and not reason:
+            reason = 'route_missing'
+        elif res.get('ok') is False and not reason:
+            reason = 'injection_failed'
+        if reason in ('no_open_items', 'no open items to trigger'):
             return {
                 'ok': False,
                 'triggered': False,
                 'mode': 'live_runner',
-                'reason': reason,
-                'detail': detail_map.get(reason, reason),
+                'reason': 'no_open_items',
+                'detail': 'All daily non-negotiables and commitments are already completed or paused.',
                 'result': res,
             }
+        detail_map = {
+            'policy_blocked': 'Blocked by wake guardrails (check pause, quiet hours, daily limit, or notifications switch).',
+            'route_missing': 'No active chat session route registered yet — send one message in chat first.',
+            'injection_failed': 'Gateway injection is disabled or unavailable — click Enable Background Wakes first.',
+            'invalid_status': err or 'That item is already completed or paused.',
+        }
+        return {
+            'ok': False,
+            'triggered': False,
+            'mode': 'live_runner',
+            'reason': reason or 'not_triggered',
+            'detail': detail_map.get(reason, err or reason or 'Check-in could not fire right now.'),
+            'result': res,
+        }
 
     if _store is None or not db_path.exists():
         return {
@@ -1043,12 +1076,12 @@ def check_in_now(payload: dict | None = None):
             all_items = st.list()
             targets = [
                 it for it in all_items
-                if it.get('kind') == 'non_negotiable' and it.get('status') == 'active'
+                if it.get('kind') == 'non_negotiable' and it.get('status') in ('active', 'queued', 'submitted')
             ]
             if not targets:
                 targets = [
                     it for it in all_items
-                    if it.get('status') == 'active'
+                    if it.get('status') in ('active', 'queued', 'submitted')
                 ]
         if not targets:
             return {

@@ -393,6 +393,86 @@ def test_desktop_plugin_js_passes_admission_lint_and_sync():
     ):
         assert expected in src, f'Missing expected UI contract token: {expected}'
 
+    # Verify dashboard/manifest.json hides empty Web Dashboard tab
+    import json as _json
+    manifest_data = _json.loads((BUTLER_ROOT / 'dashboard' / 'manifest.json').read_text())
+    assert manifest_data.get('tab', {}).get('hidden') is True
+
     # Verify valid ESM syntax via node --check
     proc = subprocess.run(['node', '--check', str(desktop_js)], capture_output=True, text=True)
     assert proc.returncode == 0, proc.stderr
+
+
+def test_display_name_paused_check_in_and_real_runner_trigger(tmp_path, monkeypatch):
+    from butler.runner import Runner
+    from butler.store import ResponsibilityStore
+
+    env = _load_api_module(tmp_path, monkeypatch)
+    client = env['client']
+    base = '/api/plugins/butler'
+
+    _seed_state_db_sessions(env['hermes_home'] / 'state.db', [
+        {'id': 'desk-main', 'source': 'desktop', 'session_key': 'desktop:main', 'last_activity_at': 999.0},
+    ])
+
+    setup = client.post(f'{base}/enable-proactive', json={
+        'displayName': '  Hayk  ',
+        'timezone': 'America/Chicago',
+        'nonNegotiables': ['Morning walk'],
+    }).json()
+    assert setup['settings']['displayName'] == 'Hayk'
+    nn_id = setup['non_negotiables'][0]['id']
+
+    # Pause blocks check-in-now
+    paused_settings = dict(setup['settings'], paused=True)
+    assert client.put(f'{base}/settings', json=paused_settings).status_code == 200
+    paused_ci = client.post(f'{base}/check-in-now', json={}).json()
+    assert paused_ci['ok'] is False
+    assert paused_ci['mode'] == 'paused'
+    assert paused_ci['reason'] == 'policy_blocked'
+
+    # Resume and wire a real Runner instance
+    assert client.put(f'{base}/settings', json=dict(setup['settings'], paused=False)).status_code == 200
+
+    injected = []
+
+    class DummyCtx:
+        def inject_message(self, *args, **kwargs):
+            injected.append((args, kwargs))
+            return True
+
+    real_runner = Runner(
+        DummyCtx(),
+        lambda: ResponsibilityStore(env['profile_dir'] / 'responsibilities.sqlite3'),
+        directory=env['profile_dir'],
+        now_fn=env['api']._now_fn,
+    )
+    env['api']._runner.set_active_runner(real_runner)
+    try:
+        # Missing item -> 404
+        nf = client.post(f'{base}/check-in-now', json={'item_id': 'nonexistent'})
+        assert nf.status_code == 404
+
+        # Real runner trigger_now fires and check_in_now reports live_runner ok=True
+        ok_ci = client.post(f'{base}/check-in-now', json={}).json()
+        assert ok_ci['ok'] is True
+        assert ok_ci['triggered'] is True
+        assert ok_ci['mode'] == 'live_runner'
+        assert len(injected) == 1
+
+        # Force item into submitted status and verify manual check-in-now reopens & fires
+        with ResponsibilityStore(env['profile_dir'] / 'responsibilities.sqlite3') as st:
+            cur_row = st.get(nn_id)
+            assert cur_row is not None
+            due = cur_row['due_at']
+            claimed = st.claim_due(due, lease_seconds=60)[0]
+            st.advance_followup(nn_id, claimed['claim_token'], due, next_due_at=None, stage=3, next_status='submitted')
+            sub_row = st.get(nn_id)
+            assert sub_row is not None and sub_row['status'] == 'submitted'
+
+        sub_ci = client.post(f'{base}/check-in-now', json={'item_id': nn_id}).json()
+        assert sub_ci['ok'] is True
+        assert sub_ci['mode'] == 'live_runner'
+        assert len(injected) == 2
+    finally:
+        env['api']._runner.set_active_runner(None)

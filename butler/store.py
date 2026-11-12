@@ -182,6 +182,8 @@ class ResponsibilityStore:
         if due_at is not _UNSET:
             assignments.append('due_at=?')
             params.append(stamp(due_at))
+            if due_at is not None:
+                assignments.append("status=CASE WHEN status IN ('submitted','queued') THEN 'active' ELSE status END")
         if timezone_name is not _UNSET:
             assignments.append('timezone=?')
             params.append(_normalize_timezone(timezone_name))
@@ -223,26 +225,32 @@ class ResponsibilityStore:
         return result.rowcount == 1
 
     def pause(self, item_id):
-        return self._transition(item_id, 'paused', ('active',))
+        return self._transition(item_id, 'paused', ('active', 'queued', 'submitted'))
 
     def resume(self, item_id):
         return self._transition(item_id, 'active', ('paused',))
 
     def stop(self, item_id):
-        return self._transition(item_id, 'stopped', ('active', 'paused'))
+        return self._transition(item_id, 'stopped', ('active', 'paused', 'queued', 'submitted'))
 
     def complete(self, item_id):
-        return self._transition(item_id, 'completed', ('active', 'paused'))
+        return self._transition(item_id, 'completed', ('active', 'paused', 'queued', 'submitted'))
 
     def snooze(self, item_id, until):
         result = self.db.execute(
-            "UPDATE responsibilities SET due_at=?,claim_token=NULL,claim_until=NULL,generation=generation+1 WHERE id=? AND status IN ('active','paused')",
+            """UPDATE responsibilities
+                  SET due_at=?,
+                      status=CASE WHEN status='paused' THEN 'paused' ELSE 'active' END,
+                      claim_token=NULL,
+                      claim_until=NULL,
+                      generation=generation+1
+                WHERE id=? AND status IN ('active','paused','queued','submitted')""",
             (stamp(until), item_id),
         )
         return result.rowcount == 1
 
     def reopen(self, item_id, *, due_at=None) -> bool:
-        allowed = ('completed', 'submitted', 'paused', 'stopped', 'active')
+        allowed = ('completed', 'submitted', 'queued', 'paused', 'stopped', 'active')
         placeholders = ','.join('?' for _ in allowed)
         if due_at is not None:
             due_stamp = stamp(due_at)
@@ -265,7 +273,7 @@ class ResponsibilityStore:
         if not isinstance(local_date_str, str) or not local_date_str.strip():
             raise ValueError('local_date_str must be a non-empty string')
         result = self.db.execute(
-            "UPDATE responsibilities SET status='completed', completed_day=?, claim_token=NULL, claim_until=NULL, generation=generation+1 WHERE id=? AND status IN ('active','paused','submitted','completed')",
+            "UPDATE responsibilities SET status='completed', completed_day=?, claim_token=NULL, claim_until=NULL, generation=generation+1 WHERE id=? AND status IN ('active','paused','queued','submitted','completed')",
             (local_date_str.strip(), item_id),
         )
         return result.rowcount == 1
@@ -289,7 +297,7 @@ class ResponsibilityStore:
                     claim_until=NULL,
                     generation=generation+1
                 WHERE kind='non_negotiable'
-                  AND status IN ('completed', 'submitted')
+                  AND status IN ('completed', 'submitted', 'queued')
                   AND (completed_day IS NULL OR completed_day != ?)
                 """,
                 (due_stamp, clean_day),
