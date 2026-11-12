@@ -223,16 +223,16 @@ class ResponsibilityStore:
         return result.rowcount == 1
 
     def pause(self, item_id):
-        return self._transition(item_id, 'paused', ('active',))
+        return self._transition(item_id, 'paused', ('active', 'submitted'))
 
     def resume(self, item_id):
         return self._transition(item_id, 'active', ('paused',))
 
     def stop(self, item_id):
-        return self._transition(item_id, 'stopped', ('active', 'paused'))
+        return self._transition(item_id, 'stopped', ('active', 'paused', 'submitted'))
 
     def complete(self, item_id):
-        return self._transition(item_id, 'completed', ('active', 'paused'))
+        return self._transition(item_id, 'completed', ('active', 'paused', 'submitted'))
 
     def snooze(self, item_id, until):
         result = self.db.execute(
