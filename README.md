@@ -26,12 +26,10 @@
 
 ## 🎬 Watch Butler in Action
 
+https://github.com/user-attachments/assets/41b907d3-9947-4a26-9d50-96539a9506d0
+
 <p align="center">
-  <a href="https://github.com/haykguy/butler/releases/download/v0.3.0/Butler_demo_v8_FULL.mp4">
-    <img src="assets/BUTLER_ending_screen.png" alt="Butler Demo Video" width="100%"/>
-  </a>
-  <br/>
-  <em>▶️ <b><a href="https://github.com/haykguy/butler/releases/download/v0.3.0/Butler_demo_v8_FULL.mp4">Watch the full 1080p demo walkthrough video</a></b></em>
+  <em><a href="https://github.com/haykguy/butler/releases/download/v0.3.0/Butler_demo_v8_FULL.mp4"><b>Download 1080p Master (.mp4)</b></a></em>
 </p>
 
 ---
