@@ -14,7 +14,7 @@ import json
 from .expressions import _session, _EFFECTS, EFFECTS_UNAVAILABLE
 
 POLLS_UNAVAILABLE = ('iMessage polls are unavailable: Hermes has no public plugin route for them yet '
-                     '(pending a send_poll verb on ctx.platform_actions). Ask the question as a normal reply.')
+                     '(pending a send_poll verb on ctx.platform_actions, NousResearch/hermes-agent#154299). Ask the question as a normal reply.')
 
 
 def _cache_media(kind, data, ext):

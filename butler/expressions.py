@@ -9,7 +9,7 @@ them. Every such request fails closed without contacting any backend.
 import json
 
 EFFECTS_UNAVAILABLE = ('iMessage effects are unavailable: Hermes has no public plugin route for them yet '
-                       '(pending a send_effect verb on ctx.platform_actions). Send the text as a normal reply.')
+                       '(pending a send_effect verb on ctx.platform_actions, NousResearch/hermes-agent#154299). Send the text as a normal reply.')
 
 
 _EFFECTS = frozenset(('slam', 'loud', 'gentle', 'invisible', 'balloons', 'confetti',
