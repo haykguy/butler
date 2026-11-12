@@ -29,11 +29,15 @@ class FakeStore:
     def list(self):
         return self.items
 
-    def pause(self, item_id):
+    def pause(self, item_id, *, notes=None):
         item = self.get(item_id)
         if item is None:
             return False
         item['status'] = 'paused'
+        if notes is not None:
+            meta = dict(item.get('metadata') or {})
+            meta['notes'] = str(notes).strip()
+            item['metadata'] = meta
         return True
 
 
@@ -60,7 +64,7 @@ class ToolTests(unittest.TestCase):
         create = ctx.tools['butler_create']['handler']
         with patch('butler.tools.capture_bound_turn_route', return_value={'route_id': 'route-1'}):
             first = json.loads(create({'title': 'Send the Acme invoice', 'due_at': '2026-11-12T10:00:00-06:00'}))
-            store.items[0].update({'kind': 'commitment', 'route_id': 'route-1', 'status': 'active'})
+            store.items[0].update({'kind': 'commitment', 'route_id': 'route-1', 'status': 'paused'})
             second = json.loads(create({'title': 'Send Acme invoice before 5pm today', 'due_at': '2026-11-12T16:40:00-06:00'}))
         self.assertEqual(len(store.items), 1)
         self.assertIn('duplicate', second['error'].lower())
@@ -119,7 +123,9 @@ class ToolTests(unittest.TestCase):
             register_tools(ctx, lambda: ResponsibilityStore(Path(directory) / 'test.sqlite'))
             created = json.loads(ctx.tools['butler_create']['handler']({'title': 'Review', 'due_at': '2026-12-01T09:00:00Z'}))['responsibility']
             manage = ctx.tools['butler_manage']['handler']
-            self.assertEqual(json.loads(manage({'action': 'pause', 'id': created['id']}))['responsibility']['status'], 'paused')
+            paused = json.loads(manage({'action': 'pause', 'id': created['id'], 'notes': 'Await user reply'}))['responsibility']
+            self.assertEqual(paused['status'], 'paused')
+            self.assertEqual(paused['metadata']['notes'], 'Await user reply')
             self.assertEqual(json.loads(manage({'action': 'get', 'id': created['id']}))['responsibility']['status'], 'paused')
 
     def test_reject_naive_datetime(self):

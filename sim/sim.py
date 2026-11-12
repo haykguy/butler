@@ -45,6 +45,9 @@ def llm(prompt):
     r = subprocess.run(['codex', 'exec', '--ephemeral', '--skip-git-repo-check',
                         '--sandbox', 'read-only', '--model', os.environ.get('BUTLER_SIM_MODEL', 'gpt-6.1-sol'), '-'], input=prompt,
                        capture_output=True, text=True, cwd=SIM_ROOT, timeout=300)
+    if r.returncode != 0:
+        detail = (r.stderr or r.stdout or '').strip()[-400:]
+        raise RuntimeError(f'codex exec failed (exit {r.returncode}): {detail}')
     out = r.stdout.strip()
     m = re.search(r'\{.*\}', out, re.S)
     if not m:

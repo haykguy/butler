@@ -261,3 +261,16 @@ def test_context_open_loop_awareness_and_backward_compatibility():
     assert 'Task 0' in rich_out and 'Task 7' in rich_out
     assert 'Task 8' not in rich_out
     assert '(+2 more)' in rich_out
+
+    paused_out = build_lifetime_awareness_context(
+        cfg,
+        now=now,
+        active_responsibilities=[
+            {'id': 'nn-paused', 'title': 'Paused habit', 'kind': 'non_negotiable', 'status': 'paused'},
+            {'id': 'c-paused', 'title': 'Send the Acme invoice', 'kind': 'commitment', 'status': 'paused', 'deadline_at': _utc(2026, 11, 12, 17, 0)},
+        ],
+    )
+    assert paused_out is not None
+    assert 'Paused habit' not in paused_out
+    assert 'Open commitments (1):' in paused_out
+    assert 'Send the Acme invoice' in paused_out and 'PAUSED' in paused_out and '[id=c-paused]' in paused_out

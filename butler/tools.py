@@ -159,7 +159,7 @@ def _find_duplicate_open_responsibility(store, title, kind, route_id):
     for item in items or []:
         if not isinstance(item, dict):
             continue
-        if item.get('status', 'active') not in ('active', 'queued', 'submitted'):
+        if item.get('status', 'active') not in ('active', 'queued', 'submitted', 'paused'):
             continue
         if item.get('kind', kind) != kind or item.get('route_id') != route_id:
             continue
@@ -515,7 +515,15 @@ def register_tools(
                 )
                 return json.dumps(res, default=str)
 
-            changed = store.snooze(item_id, when, notes=args.get('notes')) if action == 'snooze' else getattr(store, action)(item_id)
+            if action == 'snooze':
+                changed = store.snooze(item_id, when, notes=args.get('notes'))
+            elif action == 'pause' and args.get('notes') is not None:
+                try:
+                    changed = store.pause(item_id, notes=args.get('notes'))
+                except TypeError:
+                    changed = store.pause(item_id)
+            else:
+                changed = getattr(store, action)(item_id)
             res = (
                 {'responsibility': store.get(item_id)}
                 if changed
@@ -537,7 +545,7 @@ def register_tools(
                 'action': {'type': 'string', 'enum': list(_VALID_MANAGE_ACTIONS)},
                 'id': {'type': 'string'},
                 'until': {'type': 'string', 'description': 'Timezone-aware ISO 8601 datetime for snooze.'},
-                'notes': {'type': 'string', 'description': 'For snooze: self-contained follow-up context (what is open, what happened, and what you will do/say next). For update: replace notes.'},
+                'notes': {'type': 'string', 'description': 'For snooze or pause: self-contained follow-up context (what is open, what happened, and what you will do/say next). For update: replace notes.'},
                 'due_at': {'type': 'string', 'description': 'Optional timezone-aware ISO 8601 datetime for reopen or update.'},
                 'deadline_at': {'type': 'string', 'description': 'Optional timezone-aware ISO 8601 deadline (or empty string to clear) for update.'},
                 'title': {'type': 'string', 'description': 'Updated title for update.'},

@@ -242,8 +242,32 @@ class ResponsibilityStore:
         )
         return result.rowcount == 1
 
-    def pause(self, item_id):
-        return self._transition(item_id, 'paused', ('active', 'submitted'))
+    def pause(self, item_id, *, notes=None):
+        if notes is None:
+            return self._transition(item_id, 'paused', ('active', 'submitted'))
+        self.db.execute('BEGIN IMMEDIATE')
+        try:
+            row = self.db.execute(
+                "SELECT metadata FROM responsibilities WHERE id=? AND status IN ('active','submitted')",
+                (item_id,),
+            ).fetchone()
+            if row is None:
+                self.db.execute('ROLLBACK')
+                return False
+            metadata = json.loads(row['metadata'] or '{}')
+            metadata['notes'] = str(notes).strip()
+            result = self.db.execute(
+                """UPDATE responsibilities SET status='paused',
+                   claim_token=NULL,claim_until=NULL,generation=generation+1,metadata=?
+                   WHERE id=? AND status IN ('active','submitted')""",
+                (json.dumps(metadata), item_id),
+            )
+            self.db.execute('COMMIT')
+            return result.rowcount == 1
+        except BaseException:
+            if self.db.in_transaction:
+                self.db.execute('ROLLBACK')
+            raise
 
     def resume(self, item_id):
         return self._transition(item_id, 'active', ('paused',))

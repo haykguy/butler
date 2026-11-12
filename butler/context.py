@@ -303,21 +303,23 @@ def _render_responsibilities_block(
                 open_today.append(f'{title}{due_note}{id_tag}')
             continue
 
-        if status in ('completed', 'paused'):
+        if status == 'completed':
             continue
         urgent_dt = deadline_dt or due_dt
         sort_ts = urgent_dt.timestamp() if urgent_dt is not None else far_future
-        status_rank = 0 if status == 'active' else 1
+        status_rank = 0 if status == 'active' else (1 if status == 'submitted' else 2)
         nudge_rank = -int(raw.get('nudge_count') or 0)
         when_parts: list[str] = []
         if kind != 'commitment':
             when_parts.append(kind)
-        if due_dt is not None:
+        if due_dt is not None and status != 'paused':
             when_parts.append(f"due {local_time(due_dt, zone).strftime('%Y-%m-%d %H:%M')}")
         if deadline_dt is not None:
             when_parts.append(f"deadline {local_time(deadline_dt, zone).strftime('%Y-%m-%d %H:%M')}")
         if status == 'submitted':
             when_parts.append('AWAITING YOUR DECISION: no next touch is scheduled, snooze/complete/stop it')
+        elif status == 'paused':
+            when_parts.append('PAUSED: no automatic follow-up scheduled, snooze/complete/stop it if this message updates it')
         meta_str = f" ({', '.join(when_parts)})" if when_parts else ''
         commitments.append(((status_rank, sort_ts, nudge_rank), f'{title}{meta_str}{id_tag}'))
 

@@ -256,8 +256,19 @@ def test_model_can_close_pause_stop_and_store_followup_note_on_submitted_item(tm
     got = store.get(item['id'])
     assert got['status'] == 'active' and got['metadata']['notes'] == 'User was in a meeting; ask after lunch.'
     store.db.execute("UPDATE responsibilities SET status='submitted' WHERE id=?", (item['id'],))
-    assert store.pause(item['id'])
-    assert store.get(item['id'])['status'] == 'paused'
+    assert store.pause(item['id'], notes='Parked pending user reply.')
+    paused = store.get(item['id'])
+    assert paused is not None
+    assert paused['status'] == 'paused' and paused['metadata']['notes'] == 'Parked pending user reply.'
+    hooks = AwarenessHooks(
+        directory=lambda: tmp_path,
+        load_state=lambda: {},
+        now_fn=lambda: NOW,
+        system_tz_fn=lambda: 'America/Chicago',
+        store_factory=lambda: ResponsibilityStore(tmp_path / 'transitions.sqlite'),
+    )
+    injected = hooks.pre_llm_call(user_message='I will send it in 20 minutes', conversation_history=[], is_first_turn=False)
+    assert injected is not None and 'Open task' in injected['context'] and 'PAUSED' in injected['context']
     assert store.resume(item['id'])
     store.db.execute("UPDATE responsibilities SET status='submitted' WHERE id=?", (item['id'],))
     assert store.stop(item['id'])

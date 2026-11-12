@@ -226,7 +226,7 @@ class AwarenessHooks:
                 return [
                     it for it in store.list()
                     if isinstance(it, dict)
-                    and it.get('status') in ('active', 'submitted')
+                    and it.get('status') in ('active', 'submitted', 'paused')
                     and (it.get('route_id') == route_id if route_id else not it.get('route_id'))
                 ]
             finally:
