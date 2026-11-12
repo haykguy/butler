@@ -84,6 +84,9 @@ PERSISTENCE_PROFILES: dict[str, dict] = {
 }
 
 
+WAKE_MARKER = 'Proactive Follow-Up Turn'
+
+
 def _zone(effective_timezone: str) -> ZoneInfo:
     candidate = (effective_timezone or 'UTC').strip()
     if candidate.startswith(':'):
@@ -332,6 +335,35 @@ def _format_local_stamp(dt_val: datetime | str | None, tz: ZoneInfo) -> str:
     return loc.strftime('%Y-%m-%d %H:%M %Z')
 
 
+JUDGMENT_RULES = (
+    'JUDGMENT (how a good chief of staff follows up):\n'
+    '1. Read their availability before nudging: recent chat, calendar/time of day, quiet hours, anything they said '
+    '("not now", "busy", "later"). If busy or overloaded, back off or batch; do not stop caring about the item.\n'
+    '2. Learn from reactions: check recent chat for how they responded to earlier nudges like this one. If they '
+    'ignored or brushed off this kind of message, do less of it; if they engaged, keep doing it. Save durable '
+    'preferences ("don\'t remind me about X") to memory immediately.\n'
+    '3. Urgent or blocking with a real time window (deadline, money, something that expires): come back sooner and '
+    'more often, and go louder (voice note where available) only if it truly matters. Casual items: later and lighter.\n'
+    '4. Never repeat a message word for word. Each nudge must add something: a new fact, your best guess, a prepared '
+    'draft, or a smaller next step. No guilt-tripping, no machinery, ids or tool talk.\n'
+    '5. If you are blocked on them, say exactly what you need. If the unanswered count below is rising, space out '
+    'further or stop; continuing when it would annoy rather than help is the wrong call.\n'
+    '6. A promise to check back counts only once the item shows a scheduled next time (butler_manage list).'
+)
+
+
+def _engagement_line(engagement: dict | None, now_utc: datetime, tz: ZoneInfo) -> str:
+    if not engagement:
+        return 'ENGAGEMENT: no history recorded yet.'
+    last_user = engagement.get('last_user_at')
+    unanswered = int(engagement.get('unanswered_wakes') or 0)
+    when = _format_local_stamp(last_user, tz) if last_user else 'never seen'
+    return (
+        f'ENGAGEMENT: unanswered proactive nudges since their last real message: {unanswered}; '
+        f'their last message: {when}. Use this to decide whether to nudge, wait longer, or let it go.'
+    )
+
+
 def build_action_first_wake_prompt(
     items: list[dict],
     decisions: dict[str, FollowupDecision] | list[FollowupDecision],
@@ -339,6 +371,7 @@ def build_action_first_wake_prompt(
     *,
     now: datetime,
     effective_timezone: str = 'UTC',
+    engagement: dict | None = None,
 ) -> str:
     """Wake prompt: hands the model the situation and ownership of what happens next."""
     now_utc = _require_aware_utc(now)
@@ -377,7 +410,7 @@ def build_action_first_wake_prompt(
         )
 
     sections = [
-        f"Proactive Follow-Up Turn ({local_now.strftime('%A %Y-%m-%d %H:%M %Z')}, timezone={effective_timezone}):",
+        f"{WAKE_MARKER} ({local_now.strftime('%A %Y-%m-%d %H:%M %Z')}, timezone={effective_timezone}):",
         'Open responsibilities that came due:',
         *item_lines,
         '',
@@ -398,6 +431,8 @@ def build_action_first_wake_prompt(
             + ('(Items with a recurring interval will recur on their own interval; you may still change it.) ' if recurring else '')
             + 'If you do nothing the item stays "awaiting your decision" and will NOT wake again by itself.'
         ),
+        _engagement_line(engagement, now_utc, tz),
+        JUDGMENT_RULES,
         (
             f'OWNER PREFERENCES (hints, not a schedule): tone={tone}: {tone_rules} '
             f'persistence={persistence}: {PERSISTENCE_PROFILES[persistence]["hint"]}'

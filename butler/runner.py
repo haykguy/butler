@@ -127,11 +127,12 @@ def _call_coalesce_due_batch(items_and_decisions):
         return [_FallbackWakeBatch(rid, grouped[rid][0], grouped[rid][1]) for rid in order]
 
 
-def _call_build_action_first_wake_prompt(items, decisions, settings, *, now, effective_timezone='UTC'):
+def _call_build_action_first_wake_prompt(items, decisions, settings, *, now, effective_timezone='UTC', engagement=None):
     try:
         from . import followup as _followup
         return _followup.build_action_first_wake_prompt(
             items, decisions, settings, now=now, effective_timezone=effective_timezone,
+            engagement=engagement,
         )
     except ImportError:
         tone = (settings or {}).get('tone', 'Balanced')
@@ -295,6 +296,20 @@ class Runner:
                 log.debug('Butler could not record wake log for %s', item_id, exc_info=True)
 
     @staticmethod
+    def _engagement_gate(store, settings: dict, now: datetime) -> str | None:
+        """Owner-set safety gates (not model decisions): stop piling nudges on someone who is not answering,
+        and keep a minimum gap between proactive wakes. 0 disables a gate."""
+        eng = store.get_engagement()
+        cap = int(settings.get('maxUnanswered', 0) or 0)
+        if cap and eng['unanswered_wakes'] >= cap:
+            return 'max_unanswered'
+        gap = int(settings.get('minWakeGapMinutes', 0) or 0)
+        last = eng.get('last_wake_at')
+        if gap and last is not None and (now - last) < timedelta(minutes=gap):
+            return 'min_wake_gap'
+        return None
+
+    @staticmethod
     def _defer_or_snooze(store, item_id: str, token: str, now: datetime, until: datetime) -> None:
         if hasattr(store, 'defer_claim'):
             store.defer_claim(item_id, token, now, until=until)
@@ -420,6 +435,7 @@ class Runner:
 
             prompt = build_action_first_wake_prompt(
                 cur_items, cur_decisions_map, settings, now=now, effective_timezone=effective_timezone,
+                engagement=(store.get_engagement() if hasattr(store, 'get_engagement') else None),
             )
             accepted = False
             err_detail = ''
@@ -442,6 +458,8 @@ class Runner:
                     self._advance_item(store, it['id'], it['claim_token'], now, dec)
                     actions_str = ','.join(dec.actions) if getattr(dec, 'actions', None) else 'check_in'
                     self._record_log(store, it['id'], now, actions_str, 'injected', f'stage={dec.next_stage}')
+                if hasattr(store, 'note_wake_sent'):
+                    store.note_wake_sent(now)
                 injected_batches += 1
                 woken_items += len(cur_items)
             else:
@@ -558,6 +576,17 @@ class Runner:
                             'watches_unchanged': watches_unchanged,
                             'reset_non_negotiables': reset_count,
                             'policy_reason': reason,
+                        }
+
+                if not force_wake and hasattr(store, 'get_engagement'):
+                    held = self._engagement_gate(store, settings, now)
+                    if held:
+                        for item, _ in routable:
+                            store.release_claim(item['id'], item['claim_token'], now)
+                        return {
+                            'claimed': len(claimed), 'injected': 0, 'woken_items': 0, 'deferred': 0,
+                            'skipped_unroutable': skipped_unroutable, 'watches_unchanged': watches_unchanged,
+                            'reset_non_negotiables': reset_count, 'policy_reason': held,
                         }
 
                 waking_pairs = []

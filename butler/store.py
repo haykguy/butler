@@ -87,6 +87,10 @@ class ResponsibilityStore:
           outcome TEXT NOT NULL,
           detail TEXT NOT NULL DEFAULT ''
         );
+        CREATE TABLE IF NOT EXISTS engagement (
+          id INTEGER PRIMARY KEY CHECK(id=1),
+          last_user_at TEXT, last_wake_at TEXT, unanswered_wakes INTEGER NOT NULL DEFAULT 0
+        );
         CREATE INDEX IF NOT EXISTS wake_log_ts ON wake_log(timestamp DESC, id DESC);
         ''')
         self._migrate_schema()
@@ -437,6 +441,31 @@ class ResponsibilityStore:
             (item_id, token, stamp(now)),
         )
         return result.rowcount == 1
+
+    def get_engagement(self) -> dict:
+        row = self.db.execute('SELECT last_user_at,last_wake_at,unanswered_wakes FROM engagement WHERE id=1').fetchone()
+        out = {'last_user_at': None, 'last_wake_at': None, 'unanswered_wakes': 0}
+        if row:
+            out['unanswered_wakes'] = int(row['unanswered_wakes'])
+            for k in ('last_user_at', 'last_wake_at'):
+                if row[k]:
+                    out[k] = datetime.fromisoformat(row[k].replace('Z', '+00:00'))
+        return out
+
+    def note_user_reply(self, now) -> None:
+        """A real user message arrived: the unanswered-nudge counter resets."""
+        self.db.execute(
+            'INSERT INTO engagement(id,last_user_at,unanswered_wakes) VALUES (1,?,0) '
+            'ON CONFLICT(id) DO UPDATE SET last_user_at=excluded.last_user_at, unanswered_wakes=0',
+            (stamp(now),),
+        )
+
+    def note_wake_sent(self, now) -> None:
+        self.db.execute(
+            'INSERT INTO engagement(id,last_wake_at,unanswered_wakes) VALUES (1,?,1) '
+            'ON CONFLICT(id) DO UPDATE SET last_wake_at=excluded.last_wake_at, unanswered_wakes=unanswered_wakes+1',
+            (stamp(now),),
+        )
 
     def record_wake_log(self, item_id, now, action, outcome, detail='') -> None:
         if not isinstance(action, str) or not action.strip():

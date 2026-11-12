@@ -261,6 +261,8 @@ stateDiagram-v2
 
 - **Crash-Safe Fenced Claims:** `ResponsibilityStore` executes claims inside `BEGIN IMMEDIATE`, assigning a unique fencing token and lease window. Subsequent state transitions verify both item `id` and the active lease token, preventing split-brain duplicate outreach across restarts.
 - **Injection != Delivery:** One-off responsibilities transition to `submitted` (accepted by host dispatch), never falsely claiming confirmed end-user read receipts.
+- **Engagement safety gates (owner-set, not model-set):** Butler counts proactive nudges sent since your last real message. `maxUnanswered` (default 5, `0` = off) stops piling nudges onto someone who is not answering, and `minWakeGapMinutes` (default 1, `0` = off) keeps a minimum gap between wakes. A real reply resets the counter; Butler's own wake prompts never do. The model cannot change either setting.
+- **Judgment, not timers:** Each wake prompt carries the rules a good chief of staff follows: read availability, learn from how you reacted to earlier nudges, escalate only when stakes are real, never repeat a message, and let go when continuing would annoy. After every ordinary reply the model is also told to decide whether to come back and, if so, schedule it in that same turn.
 - **Atomic Cross-Process Wake Reservations:** `Policy.reserve_wake(now)` validates `notificationsEnabled`, `!paused`, and IANA local quiet hours (handling both same-day `09:00–17:00` and overnight `22:00–07:30` spans), then atomically increments `(local_day, count)` inside `policy.sqlite3` under `BEGIN IMMEDIATE` to enforce `dailyLimit`.
 
 ---

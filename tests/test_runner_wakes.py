@@ -277,6 +277,10 @@ class UpgradedStoreAdapter:
     def close(self):
         self._base.close()
 
+    def __getattr__(self, name):
+        # forward any store method the adapter does not wrap (e.g. engagement tracking)
+        return getattr(self._base, name)
+
 
 def _make_harness(tmp_path):
     state = {'extras': {}, 'logs': []}

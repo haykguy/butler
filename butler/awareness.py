@@ -13,6 +13,7 @@ from .context import (
 )
 from .notifications import apply_system_controls_to_hermes, read_hermes_load_state
 from .policy import Policy
+from .followup import WAKE_MARKER
 from .settings import defaults, load, quiet_human_preset, save
 
 log = logging.getLogger(__name__)
@@ -21,7 +22,7 @@ log = logging.getLogger(__name__)
 # event capture (activityEnabled) or background outreach (notificationsEnabled).
 # Users control capture/wake switches explicitly in Butler Preferences.
 _MODEL_MUTABLE_KEYS = frozenset(
-    set(defaults()) - {'activityEnabled', 'notificationsEnabled'}
+    set(defaults()) - {'activityEnabled', 'notificationsEnabled', 'maxUnanswered', 'minWakeGapMinutes'}
 )
 
 _CONTROLS_SCHEMA = {
@@ -193,6 +194,26 @@ class AwarenessHooks:
             log.debug('Butler could not read active responsibilities', exc_info=True)
             return []
 
+    def _track_engagement(self, prof_dir: Path, user_message) -> dict | None:
+        """A real user message resets the unanswered-nudge counter; Butler's own wake prompts do not."""
+        db_file = prof_dir / 'responsibilities.sqlite3'
+        if self.store_factory is None and not db_file.exists():
+            return None
+        try:
+            from .store import ResponsibilityStore
+            store = self.store_factory() if self.store_factory is not None else ResponsibilityStore(db_file)
+            try:
+                text = user_message if isinstance(user_message, str) else ''
+                if text.strip() and not text.lstrip().startswith(WAKE_MARKER):
+                    store.note_user_reply(self.now_fn())
+                return store.get_engagement()
+            finally:
+                if hasattr(store, 'close'):
+                    store.close()
+        except Exception:
+            log.debug('Butler could not track engagement', exc_info=True)
+            return None
+
     def pre_llm_call(
         self,
         *,
@@ -200,6 +221,7 @@ class AwarenessHooks:
         is_first_turn=False,
         platform='',
         parent_session_id='',
+        user_message=None,
         **kwargs,
     ):
         # Skip delegated child subagent turns so child prompts stay clean.
@@ -212,6 +234,7 @@ class AwarenessHooks:
             live_cfg = self.load_state()
             cfg_tz = live_cfg.get('timezone', '') if isinstance(live_cfg, dict) else ''
             active_items = self._load_active_responsibilities(prof_dir)
+            engagement = self._track_engagement(prof_dir, user_message)
 
             ctx_kwargs = dict(
                 now=self.now_fn(),
@@ -233,6 +256,7 @@ class AwarenessHooks:
                     accepts_active = False
                 if accepts_active:
                     ctx_kwargs['active_responsibilities'] = active_items
+                    ctx_kwargs['engagement'] = engagement
 
             text = build_lifetime_awareness_context(settings, **ctx_kwargs)
             if not text:
