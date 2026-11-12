@@ -413,9 +413,9 @@ def _fallback_describe_cadence(settings: dict) -> dict:
         'tone': tone,
         'tone_guide': f'{tone} coaching tone.',
         'persistence': persistence,
-        'summary': f'{tone} tone · {persistence} cadence',
-        'non_negotiable_cadence': f'{persistence} daily check-in cadence',
-        'commitment_cadence': f'{persistence} commitment follow-up cadence',
+        'summary': f'{tone} tone · {persistence} preference',
+        'non_negotiable_cadence': f'{persistence} preference hint; model chooses timing',
+        'commitment_cadence': f'{persistence} preference hint; model chooses timing',
     }
 
 

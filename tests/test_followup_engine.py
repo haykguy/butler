@@ -32,8 +32,8 @@ def _utc(year, month, day, hour, minute=0, tz_name=CHI) -> datetime:
     return datetime(year, month, day, hour, minute, tzinfo=ZoneInfo(tz_name)).astimezone(timezone.utc)
 
 
-def test_no_hardcoded_cadence_left_in_code():
-    # The model owns timing; code must not carry per-level intervals or fixed morning times.
+def test_no_hardcoded_commitment_cadence_or_fixed_morning_times():
+    # The model owns commitment timing; mechanical watch polling is a separate concern.
     for name in ('next_morning_checkin', 'today_morning_checkin', '_tomorrow_morning_checkin'):
         assert not hasattr(followup, name)
     for prof in PERSISTENCE_PROFILES.values():
@@ -88,6 +88,11 @@ def test_model_chosen_interval_recurs_and_quiet_hours_still_gate():
     night = _utc(2026, 11, 11, 23, 30)
     q = next_followup_step({'id': 'q', 'due_at': night - timedelta(hours=1)}, night, cfg, effective_timezone=CHI)
     assert not q.should_wake and q.next_due_at == _utc(2026, 11, 12, 7, 0)
+    recurring = {'id': 'watch', 'kind': 'watch', 'due_at': night - timedelta(hours=1), 'interval_seconds': 3600}
+    held = next_followup_step(recurring, night, cfg, effective_timezone=CHI)
+    assert not held.should_wake and held.next_due_at == _utc(2026, 11, 12, 7, 0)
+    resumed = next_followup_step(recurring, held.next_due_at, cfg, effective_timezone=CHI)
+    assert resumed.should_wake and resumed.next_status == 'active' and resumed.next_due_at == _utc(2026, 11, 12, 7, 30)
     bypass = {'id': 'q', 'due_at': night - timedelta(hours=1), 'metadata': {'bypass_quiet_hours': True}}
     assert next_followup_step(bypass, night, cfg, effective_timezone=CHI).should_wake
 

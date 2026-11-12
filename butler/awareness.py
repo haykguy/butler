@@ -3,6 +3,7 @@ from datetime import datetime, timezone
 import inspect
 import json
 import logging
+import threading
 from pathlib import Path
 
 from .context import (
@@ -13,7 +14,7 @@ from .context import (
 )
 from .notifications import apply_system_controls_to_hermes, read_hermes_load_state
 from .policy import Policy
-from .followup import WAKE_MARKER
+from .followup import VISIBLE_WAKE_MARKER, WAKE_MARKER
 from .settings import defaults, load, quiet_human_preset, save
 
 log = logging.getLogger(__name__)
@@ -24,6 +25,39 @@ log = logging.getLogger(__name__)
 _MODEL_MUTABLE_KEYS = frozenset(
     set(defaults()) - {'activityEnabled', 'notificationsEnabled', 'maxUnanswered', 'minWakeGapMinutes'}
 )
+
+
+def _setting_value_schema(key, value):
+    """Expose validated model-mutable settings precisely to JSON-schema tool consumers."""
+    if key == 'dailyLimit':
+        return {'anyOf': [{'type': 'integer', 'minimum': 0, 'maximum': 1000}, {'type': 'null'}]}
+    enums = {
+        'tone': ['Gentle', 'Supportive', 'Balanced', 'Direct', 'Strict'],
+        'persistence': ['Minimal', 'Occasional', 'Regular', 'Persistent'],
+        'toolProgressMode': ['off', 'new', 'all'],
+        'backgroundProcessNotifications': ['off', 'error', 'concise', 'result', 'all'],
+        'memoryNotifications': ['off', 'on', 'verbose'],
+    }
+    if key in enums:
+        return {'type': 'string', 'enum': enums[key]}
+    if key in ('quietStart', 'quietEnd'):
+        return {'type': 'string', 'pattern': r'^(?:|(?:[01][0-9]|2[0-3]):[0-5][0-9])$'}
+    if key == 'timezone':
+        return {'type': 'string', 'maxLength': 128}
+    if isinstance(value, bool):
+        return {'type': 'boolean'}
+    if isinstance(value, int):
+        return {'type': 'integer'}
+    if isinstance(value, str):
+        return {'type': 'string'}
+    raise TypeError(f'No JSON schema for Butler setting {key}')
+
+
+_SETTINGS_SCHEMA_PROPERTIES = {
+    key: _setting_value_schema(key, value)
+    for key, value in defaults().items()
+    if key in _MODEL_MUTABLE_KEYS
+}
 
 _CONTROLS_SCHEMA = {
     'type': 'object',
@@ -44,7 +78,10 @@ _CONTROLS_SCHEMA = {
         },
         'settings': {
             'type': 'object',
-            'description': 'For update: partial Butler settings to update (e.g. timezone, lifetimeAwarenessEnabled, applySystemControls, suppressWarningNotifications, toolProgressMode, interimAssistantMessages, busyAckNotifications, longRunningNotifications, backgroundProcessNotifications, memoryNotifications, skillNudgesEnabled, gatewayRestartNotifications, gatewayMessageTimestamps, naturalStatusStyle, tone, persistence, quietEnabled, quietStart, quietEnd, dailyLimit, paused).',
+            'description': 'For update: partial Butler settings to update.',
+            'properties': _SETTINGS_SCHEMA_PROPERTIES,
+            'additionalProperties': False,
+            'minProperties': 1,
         },
     },
     'required': ['action'],
@@ -149,11 +186,13 @@ class AwarenessHooks:
         self.on_bound_turn = on_bound_turn
         self.store_factory = store_factory
         self.route_registry_factory = route_registry_factory
+        self._wake_claims = {}
+        self._wake_claims_lock = threading.Lock()
 
-    def _capture_turn_route_and_start(self, prof_dir: Path) -> None:
+    def _capture_turn_route_and_start(self, prof_dir: Path) -> dict | None:
         route = capture_bound_turn_route()
         if not isinstance(route, dict) or not route.get('route_id'):
-            return
+            return None
         try:
             prof_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
             reg = (
@@ -174,8 +213,9 @@ class AwarenessHooks:
                 self.on_bound_turn()
             except Exception:
                 log.warning('Butler bound-turn starter failed', exc_info=True)
+        return route
 
-    def _load_active_responsibilities(self, prof_dir: Path) -> list[dict]:
+    def _load_active_responsibilities(self, prof_dir: Path, *, route_id=None) -> list[dict]:
         db_file = prof_dir / 'responsibilities.sqlite3'
         if self.store_factory is None and not db_file.exists():
             return []
@@ -185,7 +225,9 @@ class AwarenessHooks:
             try:
                 return [
                     it for it in store.list()
-                    if isinstance(it, dict) and it.get('status') == 'active'
+                    if isinstance(it, dict)
+                    and it.get('status') in ('active', 'submitted')
+                    and (it.get('route_id') == route_id if route_id else not it.get('route_id'))
                 ]
             finally:
                 if hasattr(store, 'close'):
@@ -204,7 +246,7 @@ class AwarenessHooks:
             store = self.store_factory() if self.store_factory is not None else ResponsibilityStore(db_file)
             try:
                 text = user_message if isinstance(user_message, str) else ''
-                if text.strip() and not text.lstrip().startswith(WAKE_MARKER):
+                if text.strip() and text.strip() != VISIBLE_WAKE_MARKER and not text.lstrip().startswith(WAKE_MARKER):
                     store.note_user_reply(self.now_fn())
                 return store.get_engagement()
             finally:
@@ -214,6 +256,41 @@ class AwarenessHooks:
             log.debug('Butler could not track engagement', exc_info=True)
             return None
 
+    @staticmethod
+    def _wake_claim_key(session_id, turn_id, route_id):
+        if turn_id:
+            return f'turn:{turn_id}'
+        return str(session_id or (f'route:{route_id}' if route_id else ''))
+
+    def post_llm_call(self, *, user_message=None, assistant_response=None, session_id=None, turn_id=None, **kwargs):
+        """Finalize a hidden wake after its model turn; count only non-silent assistant output."""
+        text = user_message if isinstance(user_message, str) else ''
+        if text.strip() != VISIBLE_WAKE_MARKER:
+            return None
+        route = capture_bound_turn_route()
+        route_id = route.get('route_id') if isinstance(route, dict) else None
+        claim_key = self._wake_claim_key(session_id, turn_id, route_id)
+        if not claim_key:
+            return None
+        with self._wake_claims_lock:
+            claim = self._wake_claims.pop(claim_key, None)
+        if not claim:
+            return None
+        response = assistant_response if isinstance(assistant_response, str) else ''
+        visible = bool(response.strip()) and response.strip().upper() != '[SILENT]'
+        try:
+            from .store import ResponsibilityStore
+            prof_dir = Path(self.directory())
+            store = self.store_factory() if self.store_factory is not None else ResponsibilityStore(prof_dir / 'responsibilities.sqlite3')
+            try:
+                store.finish_pending_wake(claim['id'], claim['claim_token'], self.now_fn(), visible_response=visible)
+            finally:
+                if hasattr(store, 'close'):
+                    store.close()
+        except Exception:
+            log.debug('Butler could not finalize its proactive response', exc_info=True)
+        return None
+
     def pre_llm_call(
         self,
         *,
@@ -222,6 +299,8 @@ class AwarenessHooks:
         platform='',
         parent_session_id='',
         user_message=None,
+        session_id=None,
+        turn_id=None,
         **kwargs,
     ):
         # Skip delegated child subagent turns so child prompts stay clean.
@@ -229,12 +308,30 @@ class AwarenessHooks:
             return None
         try:
             prof_dir = Path(self.directory())
-            self._capture_turn_route_and_start(prof_dir)
+            current_route = self._capture_turn_route_and_start(prof_dir)
+            route_id = current_route.get('route_id') if isinstance(current_route, dict) else None
             settings = load(prof_dir)
             live_cfg = self.load_state()
             cfg_tz = live_cfg.get('timezone', '') if isinstance(live_cfg, dict) else ''
-            active_items = self._load_active_responsibilities(prof_dir)
+            active_items = self._load_active_responsibilities(prof_dir, route_id=route_id)
             engagement = self._track_engagement(prof_dir, user_message)
+            pending = None
+            if isinstance(user_message, str) and user_message.strip() == VISIBLE_WAKE_MARKER and route_id:
+                from .store import ResponsibilityStore
+                store = self.store_factory() if self.store_factory is not None else ResponsibilityStore(prof_dir / 'responsibilities.sqlite3')
+                try:
+                    pending = store.claim_pending_wake(route_id, self.now_fn())
+                finally:
+                    if hasattr(store, 'close'):
+                        store.close()
+                if pending:
+                    claim_key = self._wake_claim_key(session_id, turn_id, route_id)
+                    if claim_key:
+                        with self._wake_claims_lock:
+                            self._wake_claims[claim_key] = {
+                                'id': pending['id'],
+                                'claim_token': pending['claim_token'],
+                            }
 
             ctx_kwargs = dict(
                 now=self.now_fn(),
@@ -245,25 +342,26 @@ class AwarenessHooks:
                 system_timezone=self.system_tz_fn(),
             )
             accepts_active = False
-            if active_items:
-                try:
-                    sig = inspect.signature(build_lifetime_awareness_context)
-                    accepts_active = (
-                        'active_responsibilities' in sig.parameters
-                        or any(p.kind == inspect.Parameter.VAR_KEYWORD for p in sig.parameters.values())
-                    )
-                except (TypeError, ValueError):
-                    accepts_active = False
-                if accepts_active:
-                    ctx_kwargs['active_responsibilities'] = active_items
-                    ctx_kwargs['engagement'] = engagement
+            try:
+                sig = inspect.signature(build_lifetime_awareness_context)
+                accepts_active = (
+                    'active_responsibilities' in sig.parameters
+                    or any(p.kind == inspect.Parameter.VAR_KEYWORD for p in sig.parameters.values())
+                )
+            except (TypeError, ValueError):
+                accepts_active = False
+            if accepts_active:
+                # Always pass even an empty list: this injects the after-every-reply
+                # directive, and lets submitted items surface as awaiting a decision.
+                ctx_kwargs['active_responsibilities'] = active_items
+                ctx_kwargs['engagement'] = engagement
 
-            text = build_lifetime_awareness_context(settings, **ctx_kwargs)
-            if not text:
-                return None
+            text = build_lifetime_awareness_context(settings, **ctx_kwargs) or ''
             if active_items and not accepts_active:
-                text = text + '\n' + _format_responsibilities_fallback(active_items)
-            return {'context': text}
+                text = (text + '\n' if text else '') + _format_responsibilities_fallback(active_items)
+            if pending:
+                text = (text + '\n\n' if text else '') + pending['payload']
+            return {'context': text} if text else None
         except Exception:
             log.exception('Butler could not build lifetime awareness context')
             return None
@@ -292,6 +390,7 @@ def register_awareness_and_controls(
         route_registry_factory=route_registry_factory,
     )
     ctx.register_hook('pre_llm_call', hooks.pre_llm_call)
+    ctx.register_hook('post_llm_call', hooks.post_llm_call)
 
     def controls(args, **_):
         try:

@@ -39,14 +39,14 @@ const PERSISTENCE_DETAILS = {
     commitment: 'Butler decides each next touch itself and keeps at it while the item is open.',
   },
   Persistent: {
-    badge: 'Keeps going until done',
-    nonNegotiable: 'Butler keeps pursuing open items until done, paused or snoozed, going tighter and louder as stakes rise, and stops if it would annoy rather than help (respecting quiet hours & daily wake cap).',
-    commitment: 'Butler decides when to push again and preps next steps until resolved. It picks the timing, not a fixed schedule.',
+    badge: 'Persistent · model-chosen timing',
+    nonNegotiable: 'Butler maintains pressure on open items, but the model chooses each next touch from context—there are no preset reminder intervals. It may pause or stop if further nudges would not help (subject to quiet hours and the unanswered-nudge safety gate).',
+    commitment: 'Butler decides whether and when to push again and preps next steps until resolved. It picks the timing, not a fixed schedule.',
   },
 };
 
 function formatDateTime(iso, tz) {
-  if (!iso) return 'Auto-scheduled';
+  if (!iso) return 'No next time selected';
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return String(iso);
   const opts = {
@@ -1000,9 +1000,11 @@ function Page({ ctx }) {
             },
           },
             !isDone && h('span', null,
-              item.nudge_count > 0
-                ? `Nudged ${item.nudge_count}x · next at ${nextTimeStr || fullDueStr}`
-                : `Next check-in: ${fullDueStr}`,
+              item.status === 'submitted'
+                ? `Nudged ${item.nudge_count || 0}x · awaiting next touch decision`
+                : item.nudge_count > 0
+                  ? `Nudged ${item.nudge_count}x · next at ${nextTimeStr || fullDueStr}`
+                  : `Next check-in: ${fullDueStr}`,
             ),
             item.deadline_at && h('span', null, `Hard deadline: ${formatDateTime(item.deadline_at, effTz)}`),
             item.prep_hint && h('span', { style: { fontStyle: 'italic' } }, `Prep: ${item.prep_hint}`),
@@ -1706,6 +1708,28 @@ function Page({ ctx }) {
             }),
           ),
           h('div', null,
+            h('label', { style: { display: 'block', fontSize: 12.5, fontWeight: 560, marginBottom: 5 } }, 'Max unanswered proactive nudges'),
+            h('input', {
+              type: 'number', min: 0, max: 100, step: 1,
+              value: prefs.maxUnanswered ?? 5,
+              onChange: (e) => updatePref('maxUnanswered', Number(e.target.value)),
+              style: styles.input,
+            }),
+            h('span', { style: { display: 'block', fontSize: 11.5, color: 'var(--muted-foreground, #6e776f)', marginTop: 3 } },
+              'Stops after this many non-silent Butler follow-up replies go unanswered; silent checks do not count. A failed channel delivery may still consume the gate. 0 disables it.'),
+          ),
+          h('div', null,
+            h('label', { style: { display: 'block', fontSize: 12.5, fontWeight: 560, marginBottom: 5 } }, 'Minimum minutes between proactive messages'),
+            h('input', {
+              type: 'number', min: 0, max: 1440, step: 1,
+              value: prefs.minWakeGapMinutes ?? 1,
+              onChange: (e) => updatePref('minWakeGapMinutes', Number(e.target.value)),
+              style: styles.input,
+            }),
+            h('span', { style: { display: 'block', fontSize: 11.5, color: 'var(--muted-foreground, #6e776f)', marginTop: 3 } },
+              'Owner-set floor between wakes; 0 disables this gate.'),
+          ),
+          h('div', null,
             h('label', { style: { display: 'block', fontSize: 12.5, fontWeight: 560, marginBottom: 5 } }, 'Confirmed IANA Timezone'),
             h('input', {
               type: 'text',
@@ -2035,7 +2059,7 @@ function Page({ ctx }) {
                 },
                   h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 } },
                     h('span', { style: { fontWeight: 620, fontSize: 13.5 } },
-                      p === 'Persistent' ? 'Persistent — Keep bugging me until done ★' : p,
+                      p === 'Persistent' ? 'Persistent — Keep at it; timing stays model-chosen ★' : p,
                     ),
                     h('span', { style: { fontSize: 11.5, color: 'var(--muted-foreground, #6e776f)' } }, info.badge),
                   ),

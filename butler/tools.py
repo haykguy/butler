@@ -4,6 +4,7 @@ import inspect
 import json
 import os
 from pathlib import Path
+import re
 from zoneinfo import ZoneInfo
 
 from .context import local_time, resolve_effective_timezone
@@ -138,6 +139,36 @@ def _invoke_store_create(store, title: str, when: datetime, **extra_kwargs):
     return store.create(title, when, **filtered)
 
 
+def _title_identity(title: str) -> frozenset[str]:
+    """Normalize punctuation and transient timing words for duplicate-open-task checks."""
+    ignored = {
+        'a', 'an', 'the', 'to', 'for', 'by', 'at', 'on', 'in', 'before', 'after',
+        'from', 'this', 'next', 'today', 'tomorrow', 'tonight', 'now', 'am', 'pm',
+    }
+    return frozenset(token for token in re.findall(r'[a-z]+', title.casefold()) if len(token) > 1 and token not in ignored)
+
+
+def _find_duplicate_open_responsibility(store, title, kind, route_id):
+    identity = _title_identity(title)
+    if not identity:
+        return None
+    try:
+        items = store.list()
+    except Exception:
+        return None
+    for item in items or []:
+        if not isinstance(item, dict):
+            continue
+        if item.get('status', 'active') not in ('active', 'queued', 'submitted'):
+            continue
+        if item.get('kind', kind) != kind or item.get('route_id') != route_id:
+            continue
+        existing_title = item.get('title')
+        if isinstance(existing_title, str) and _title_identity(existing_title) == identity:
+            return item
+    return None
+
+
 def register_tools(
     ctx,
     store_factory=None,
@@ -184,6 +215,9 @@ def register_tools(
         title = args.get('title')
         if not isinstance(title, str) or not title.strip():
             return json.dumps({'error': 'title must be a non-empty string'})
+        allow_duplicate = args.get('allow_duplicate', False)
+        if not isinstance(allow_duplicate, bool):
+            return json.dumps({'error': 'allow_duplicate must be a boolean'})
 
         watch_file = args.get('watch_file')
         if watch_file is not None:
@@ -256,6 +290,14 @@ def register_tools(
                 meta['watch'] = {'kind': 'file', 'path': watch_file}
 
             route_id = _bind_authenticated_route(store, prof_dir)
+            duplicate = None
+            if route_id and not allow_duplicate:
+                duplicate = _find_duplicate_open_responsibility(store, title.strip(), kind, route_id)
+            if duplicate:
+                return json.dumps({
+                    'error': 'duplicate open responsibility; update or reschedule the existing item instead of creating a second copy',
+                    'existing_responsibility': duplicate,
+                }, default=str)
             wake_status = 'scheduled' if route_id else _UNAVAILABLE_WAKE_MSG
 
             item = _invoke_store_create(
@@ -280,12 +322,16 @@ def register_tools(
         'name': 'butler_create',
         'description': (
             'Record a responsibility, daily non-negotiable, proactive check-in, file watch, or open loop '
-            'authorized by the user. Omit due_at to be woken right away and choose the time yourself; you own follow-up timing (reschedule with butler_manage snooze). Persistence settings are preference hints, not schedules.'
+            'authorized by the user. Before creating, check the open list and reuse/update an item for the same outcome instead of duplicating it just to change its date or wording. If the user clearly requests a separate instance with the same title/outcome, set allow_duplicate=true. Omit due_at to be woken right away and choose the time yourself; you own follow-up timing (reschedule with butler_manage snooze). Persistence settings are preference hints, not schedules.'
         ),
         'parameters': {
             'type': 'object',
             'properties': {
                 'title': {'type': 'string', 'description': 'Clear short description of the responsibility.'},
+                'allow_duplicate': {
+                    'type': 'boolean',
+                    'description': 'Set true only when the user explicitly wants a separate instance with the same title/outcome; false by default.',
+                },
                 'due_at': {
                     'type': 'string',
                     'description': 'Optional ISO 8601 datetime with UTC offset for the first check-in/wake.',
@@ -469,7 +515,7 @@ def register_tools(
                 )
                 return json.dumps(res, default=str)
 
-            changed = store.snooze(item_id, when) if action == 'snooze' else getattr(store, action)(item_id)
+            changed = store.snooze(item_id, when, notes=args.get('notes')) if action == 'snooze' else getattr(store, action)(item_id)
             res = (
                 {'responsibility': store.get(item_id)}
                 if changed
@@ -491,12 +537,12 @@ def register_tools(
                 'action': {'type': 'string', 'enum': list(_VALID_MANAGE_ACTIONS)},
                 'id': {'type': 'string'},
                 'until': {'type': 'string', 'description': 'Timezone-aware ISO 8601 datetime for snooze.'},
+                'notes': {'type': 'string', 'description': 'For snooze: self-contained follow-up context (what is open, what happened, and what you will do/say next). For update: replace notes.'},
                 'due_at': {'type': 'string', 'description': 'Optional timezone-aware ISO 8601 datetime for reopen or update.'},
                 'deadline_at': {'type': 'string', 'description': 'Optional timezone-aware ISO 8601 deadline (or empty string to clear) for update.'},
                 'title': {'type': 'string', 'description': 'Updated title for update.'},
                 'kind': {'type': 'string', 'enum': list(_VALID_KINDS)},
                 'interval_seconds': {'type': ['integer', 'null'], 'description': 'Updated recurring interval seconds for update.'},
-                'notes': {'type': 'string', 'description': 'Updated notes for update.'},
                 'prep_hint': {'type': 'string', 'description': 'Updated prep hint for update.'},
                 'status_filter': {'type': 'string', 'description': 'Optional status filter for list.'},
                 'kind_filter': {'type': 'string', 'description': 'Optional kind filter for list.'},

@@ -295,11 +295,11 @@ def _render_responsibilities_block(
             if raw.get('completed_day') == today_str or status == 'completed':
                 done_today.append(f'{title}{id_tag}')
             elif status != 'paused':
-                due_note = ''
+                due_note = ' (awaiting your decision: no follow-up scheduled)' if status == 'submitted' else ''
                 if deadline_dt is not None:
-                    due_note = f" (by {local_time(deadline_dt, zone).strftime('%H:%M')})"
+                    due_note += f" (by {local_time(deadline_dt, zone).strftime('%H:%M')})"
                 elif due_dt is not None:
-                    due_note = f" (next {local_time(due_dt, zone).strftime('%H:%M')})"
+                    due_note += f" (next {local_time(due_dt, zone).strftime('%H:%M')})"
                 open_today.append(f'{title}{due_note}{id_tag}')
             continue
 

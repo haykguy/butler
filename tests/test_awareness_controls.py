@@ -33,6 +33,19 @@ class FakeContext:
         self.hooks.setdefault(name, []).append(callback)
 
 
+def test_controls_schema_constrains_model_mutable_settings():
+    from butler.awareness import _MODEL_MUTABLE_KEYS
+
+    ctx = FakeContext()
+    register_awareness_and_controls(ctx, directory=lambda: __import__('pathlib').Path('.'))
+    schema = ctx.tools['butler_controls']['schema']['properties']['settings']
+    assert schema['additionalProperties'] is False
+    assert set(schema['properties']) == set(_MODEL_MUTABLE_KEYS)
+    assert {'activityEnabled', 'notificationsEnabled', 'maxUnanswered', 'minWakeGapMinutes'}.isdisjoint(schema['properties'])
+    assert schema['properties']['quietEnabled']['type'] == 'boolean'
+    assert [choice['type'] for choice in schema['properties']['dailyLimit']['anyOf']] == ['integer', 'null']
+
+
 def test_timezone_detection_and_precedence(tmp_path):
     tz_file = tmp_path / 'timezone'
     tz_file.write_text('America/Chicago\n', encoding='utf-8')

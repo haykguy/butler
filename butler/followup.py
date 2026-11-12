@@ -85,6 +85,7 @@ PERSISTENCE_PROFILES: dict[str, dict] = {
 
 
 WAKE_MARKER = 'Proactive Follow-Up Turn'
+VISIBLE_WAKE_MARKER = 'Butler check-in.'
 
 
 def _zone(effective_timezone: str) -> ZoneInfo:
@@ -348,7 +349,12 @@ JUDGMENT_RULES = (
     'draft, or a smaller next step. No guilt-tripping, no machinery, ids or tool talk.\n'
     '5. If you are blocked on them, say exactly what you need. If the unanswered count below is rising, space out '
     'further or stop; continuing when it would annoy rather than help is the wrong call.\n'
-    '6. A promise to check back counts only once the item shows a scheduled next time (butler_manage list).'
+    '6. Never invent a deadline, date, business closing time, or urgency. Preserve only time boundaries the user stated or you verified with a tool. Treat a stated window as a real boundary: if they say “this week,” do not schedule a wake after that week ends unless they extend the window; if it remains unresolved, pause it or ask at the next real exchange instead of silently rolling it into next week. Clarify an ambiguous cutoff before the window closes.\n'
+    '7. Do not create a second responsibility for the same open task. Reuse and reschedule the existing item; after a reply, choose one next checkpoint rather than stacking overlapping reminders.\n'
+    '8. A promise to check back counts only once the item shows a scheduled next time (butler_manage list).\n'
+    '9. Honor timing and outreach boundaries literally. Never wake before a user-stated time they plan to act. If they say “ask me later, but make it the last nudge today,” schedule at most one later check-in that day; do not add any more that day. If they say only “last nudge today” without asking for another, do not schedule another that day.\n'
+    '10. After an explicit ETA, do not wake before it. Make at most one check after the ETA; if they do not respond, do not schedule another countdown until they reply or materially new information changes the situation. This applies even when the ETA falls after an external deadline.\n'
+    '11. No per-level intervals, escalation ladder, or fixed follow-up cadence. Choose every next time from this person’s context and what they said.'
 )
 
 
@@ -426,8 +432,7 @@ def build_action_first_wake_prompt(
         ),
         (
             'BEFORE YOU END THIS TURN, close the loop for every item above using butler_manage: '
-            'snooze with `until` set to the time YOU choose for the next touch (a minute for something live, '
-            'hours or days when it can wait), or complete/stop if finished or dropped, or pause. '
+            'snooze with `until` set to the next touch YOU choose, or complete/stop if finished or dropped, or pause. '
             + ('(Items with a recurring interval will recur on their own interval; you may still change it.) ' if recurring else '')
             + 'If you do nothing the item stays "awaiting your decision" and will NOT wake again by itself.'
         ),

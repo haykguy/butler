@@ -16,6 +16,8 @@ UTC = timezone.utc
 VALID_KINDS = ('commitment', 'non_negotiable', 'check_in', 'watch', 'open_loop')
 _VALID_STATUSES = ('active', 'paused', 'stopped', 'completed', 'queued', 'submitted')
 _UNSET = object()
+PENDING_WAKE_TTL_SECONDS = 600
+PENDING_WAKE_CLAIM_LEASE_SECONDS = 600
 
 _MIGRATION_COLUMNS = (
     ('kind', "TEXT NOT NULL DEFAULT 'commitment'"),
@@ -91,6 +93,13 @@ class ResponsibilityStore:
           id INTEGER PRIMARY KEY CHECK(id=1),
           last_user_at TEXT, last_wake_at TEXT, unanswered_wakes INTEGER NOT NULL DEFAULT 0
         );
+        CREATE TABLE IF NOT EXISTS pending_wakes (
+          id TEXT PRIMARY KEY, route_id TEXT NOT NULL, payload TEXT NOT NULL,
+          created_at TEXT NOT NULL, expires_at TEXT NOT NULL,
+          state TEXT NOT NULL DEFAULT 'pending' CHECK(state IN ('pending','claimed')),
+          claim_token TEXT, claim_until TEXT
+        );
+        CREATE INDEX IF NOT EXISTS pending_wakes_route ON pending_wakes(route_id,state,created_at);
         CREATE INDEX IF NOT EXISTS wake_log_ts ON wake_log(timestamp DESC, id DESC);
         ''')
         self._migrate_schema()
@@ -103,6 +112,13 @@ class ResponsibilityStore:
         for col_name, col_spec in _MIGRATION_COLUMNS:
             if col_name not in existing:
                 self.db.execute(f'ALTER TABLE responsibilities ADD COLUMN {col_name} {col_spec}')
+        pending_columns = {
+            row['name'] for row in self.db.execute('PRAGMA table_info(pending_wakes)').fetchall()
+        }
+        if 'claim_token' not in pending_columns:
+            self.db.execute('ALTER TABLE pending_wakes ADD COLUMN claim_token TEXT')
+        if 'claim_until' not in pending_columns:
+            self.db.execute('ALTER TABLE pending_wakes ADD COLUMN claim_until TEXT')
 
     def close(self):
         self.db.close()
@@ -227,23 +243,44 @@ class ResponsibilityStore:
         return result.rowcount == 1
 
     def pause(self, item_id):
-        return self._transition(item_id, 'paused', ('active',))
+        return self._transition(item_id, 'paused', ('active', 'submitted'))
 
     def resume(self, item_id):
         return self._transition(item_id, 'active', ('paused',))
 
     def stop(self, item_id):
-        return self._transition(item_id, 'stopped', ('active', 'paused'))
+        return self._transition(item_id, 'stopped', ('active', 'paused', 'submitted'))
 
     def complete(self, item_id):
-        return self._transition(item_id, 'completed', ('active', 'paused'))
+        return self._transition(item_id, 'completed', ('active', 'paused', 'submitted'))
 
-    def snooze(self, item_id, until):
-        result = self.db.execute(
-            "UPDATE responsibilities SET due_at=?,status=CASE WHEN status='submitted' THEN 'active' ELSE status END,claim_token=NULL,claim_until=NULL,generation=generation+1 WHERE id=? AND status IN ('active','paused','submitted')",
-            (stamp(until), item_id),
-        )
-        return result.rowcount == 1
+    def snooze(self, item_id, until, *, notes=None):
+        self.db.execute('BEGIN IMMEDIATE')
+        try:
+            row = self.db.execute(
+                "SELECT status,metadata FROM responsibilities WHERE id=? AND status IN ('active','paused','submitted')",
+                (item_id,),
+            ).fetchone()
+            if row is None:
+                self.db.execute('ROLLBACK')
+                return False
+            metadata_json = row['metadata']
+            if notes is not None:
+                metadata = json.loads(metadata_json or '{}')
+                metadata['notes'] = str(notes).strip()
+                metadata_json = json.dumps(metadata)
+            result = self.db.execute(
+                """UPDATE responsibilities SET due_at=?,status='active',
+                   claim_token=NULL,claim_until=NULL,generation=generation+1,metadata=?
+                   WHERE id=? AND status IN ('active','paused','submitted')""",
+                (stamp(until), metadata_json, item_id),
+            )
+            self.db.execute('COMMIT')
+            return result.rowcount == 1
+        except BaseException:
+            if self.db.in_transaction:
+                self.db.execute('ROLLBACK')
+            raise
 
     def reopen(self, item_id, *, due_at=None) -> bool:
         allowed = ('completed', 'submitted', 'paused', 'stopped', 'active')
@@ -411,6 +448,23 @@ class ResponsibilityStore:
                 self.db.execute('ROLLBACK')
             raise
 
+    def park_claim_for_reply(self, item_id, token, now) -> bool:
+        """Park a gated proactive item until a real user turn; do not count a send or choose a retry time."""
+        now_stamp = stamp(utc(now))
+        self.db.execute('BEGIN IMMEDIATE')
+        try:
+            result = self.db.execute(
+                """UPDATE responsibilities SET status='submitted',claim_token=NULL,claim_until=NULL,
+                   generation=generation+1 WHERE id=? AND status='active' AND claim_token=? AND claim_until>?""",
+                (item_id, token, now_stamp),
+            )
+            self.db.execute('COMMIT')
+            return result.rowcount == 1
+        except BaseException:
+            if self.db.in_transaction:
+                self.db.execute('ROLLBACK')
+            raise
+
     def defer_claim(self, item_id, token, now, *, until) -> bool:
         """Defer due_at under an active fenced lease without incrementing nudge_count."""
         now_stamp = stamp(utc(now))
@@ -452,6 +506,85 @@ class ResponsibilityStore:
                     out[k] = datetime.fromisoformat(row[k].replace('Z', '+00:00'))
         return out
 
+    def enqueue_pending_wake(self, route_id, payload, now, *, ttl_seconds=PENDING_WAKE_TTL_SECONDS):
+        if not isinstance(route_id, str) or not route_id.strip():
+            raise ValueError('route_id must be a non-empty string')
+        if not isinstance(payload, str) or not payload.strip():
+            raise ValueError('payload must be a non-empty string')
+        if isinstance(ttl_seconds, bool) or not isinstance(ttl_seconds, int) or ttl_seconds < 1:
+            raise ValueError('ttl_seconds must be a positive integer')
+        created = utc(now)
+        wake_id = str(uuid.uuid4())
+        self.db.execute(
+            'INSERT INTO pending_wakes(id,route_id,payload,created_at,expires_at) VALUES (?,?,?,?,?)',
+            (wake_id, route_id.strip(), payload, stamp(created), stamp(created + timedelta(seconds=ttl_seconds))),
+        )
+        return wake_id
+
+    def cancel_pending_wake(self, wake_id) -> bool:
+        result = self.db.execute("DELETE FROM pending_wakes WHERE id=? AND state='pending'", (wake_id,))
+        return result.rowcount == 1
+
+    def claim_pending_wake(self, route_id, now):
+        now_utc = utc(now)
+        now_stamp = stamp(now_utc)
+        lease_stamp = stamp(now_utc + timedelta(seconds=PENDING_WAKE_CLAIM_LEASE_SECONDS))
+        refreshed_expiry = stamp(now_utc + timedelta(seconds=PENDING_WAKE_TTL_SECONDS))
+        claim_token = str(uuid.uuid4())
+        self.db.execute('BEGIN IMMEDIATE')
+        try:
+            # A pre-hook may have been interrupted or vetoed by a later hook. Requeue
+            # its lease with a fresh TTL; the fencing token prevents a late post-hook
+            # from acknowledging a newer claimant's turn.
+            self.db.execute(
+                "UPDATE pending_wakes SET state='pending',claim_token=NULL,claim_until=NULL,expires_at=? "
+                "WHERE state='claimed' AND (claim_until IS NULL OR claim_until<=?)",
+                (refreshed_expiry, now_stamp),
+            )
+            self.db.execute("DELETE FROM pending_wakes WHERE state='pending' AND expires_at<=?", (now_stamp,))
+            row = self.db.execute(
+                "SELECT id,payload FROM pending_wakes WHERE route_id=? AND state='pending' AND expires_at>? ORDER BY created_at,id LIMIT 1",
+                (route_id, now_stamp),
+            ).fetchone()
+            if row is None:
+                self.db.execute('COMMIT')
+                return None
+            result = self.db.execute(
+                "UPDATE pending_wakes SET state='claimed',claim_token=?,claim_until=? WHERE id=? AND state='pending'",
+                (claim_token, lease_stamp, row['id']),
+            )
+            self.db.execute('COMMIT')
+            return {'id': row['id'], 'payload': row['payload'], 'claim_token': claim_token} if result.rowcount == 1 else None
+        except BaseException:
+            if self.db.in_transaction:
+                self.db.execute('ROLLBACK')
+            raise
+
+    def finish_pending_wake(self, wake_id, claim_token, now, *, visible_response: bool) -> bool:
+        now_stamp = stamp(now)
+        self.db.execute('BEGIN IMMEDIATE')
+        try:
+            row = self.db.execute(
+                "SELECT id FROM pending_wakes WHERE id=? AND state='claimed' AND claim_token=? AND claim_until>?",
+                (wake_id, claim_token, now_stamp),
+            ).fetchone()
+            if row is None:
+                self.db.execute('ROLLBACK')
+                return False
+            if visible_response:
+                self.db.execute(
+                    'INSERT INTO engagement(id,last_wake_at,unanswered_wakes) VALUES (1,?,1) '
+                    'ON CONFLICT(id) DO UPDATE SET last_wake_at=excluded.last_wake_at, unanswered_wakes=unanswered_wakes+1',
+                    (now_stamp,),
+                )
+            self.db.execute('DELETE FROM pending_wakes WHERE id=? AND claim_token=?', (wake_id, claim_token))
+            self.db.execute('COMMIT')
+            return True
+        except BaseException:
+            if self.db.in_transaction:
+                self.db.execute('ROLLBACK')
+            raise
+
     def note_user_reply(self, now) -> None:
         """A real user message arrived: the unanswered-nudge counter resets."""
         self.db.execute(
@@ -461,6 +594,7 @@ class ResponsibilityStore:
         )
 
     def note_wake_sent(self, now) -> None:
+        """Record a non-silent model reply finalized from a proactive wake (not injection acceptance)."""
         self.db.execute(
             'INSERT INTO engagement(id,last_wake_at,unanswered_wakes) VALUES (1,?,1) '
             'ON CONFLICT(id) DO UPDATE SET last_wake_at=excluded.last_wake_at, unanswered_wakes=unanswered_wakes+1',
