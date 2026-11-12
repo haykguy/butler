@@ -91,13 +91,21 @@ def test_entrypoint_registers_declared_tools_and_lifecycle():
         ctx = Context()
         module.register(ctx)
         assert set(ctx.tools) == {'butler_create', 'butler_manage', 'butler_expression', 'butler_controls', 'butler_imessage'}
-        assert set(ctx.hooks) == {'post_gateway_admission', 'pre_llm_call'}
+        assert set(ctx.hooks) == {'post_gateway_admission', 'pre_llm_call', 'post_llm_call'}
         assert len(ctx.hooks['post_gateway_admission']) == 2
         assert len(ctx.hooks['pre_llm_call']) == 2
         ctx.cleanup()
         [callback() for callback in ctx.hooks['post_gateway_admission']]
     finally:
         sys.modules.pop(spec.name, None)
+
+
+def test_manifest_declares_post_llm_call_hook():
+    root = Path(__file__).resolve().parents[1]
+    manifest = (root / 'plugin.yaml').read_text()
+    hooks_section = manifest.split('provides_hooks:', 1)[1]
+    declared_hooks = {line.strip()[2:] for line in hooks_section.splitlines() if line.startswith('  - ')}
+    assert 'post_llm_call' in declared_hooks
 
 
 def test_exception_does_not_acknowledge(tmp_path):

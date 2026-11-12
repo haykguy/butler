@@ -28,6 +28,8 @@ def defaults():
         tone='Balanced',
         persistence='Occasional',
         dailyLimit=None,
+        maxUnanswered=5,
+        minWakeGapMinutes=1,
         quietEnabled=False,
         quietStart='',
         quietEnd='',
@@ -97,6 +99,9 @@ def validate(data):
     limit = data['dailyLimit']
     if limit is not None and (type(limit) is not int or not 0 <= limit <= 1000):
         raise ValueError('Daily limit must be 0–1000 or unset')
+    for key, hi in (('maxUnanswered', 100), ('minWakeGapMinutes', 1440)):
+        if type(data[key]) is not int or not 0 <= data[key] <= hi:
+            raise ValueError(f'{key} must be an integer 0-{hi}')
     for key in _BOOL_KEYS:
         if type(data[key]) is not bool:
             raise ValueError(f'{key} must be boolean')

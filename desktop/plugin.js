@@ -24,29 +24,29 @@ const TONE_DESCRIPTIONS = {
 
 const PERSISTENCE_DETAILS = {
   Minimal: {
-    badge: '1 gentle check-in',
-    nonNegotiable: 'Single morning check-in around 8:30 AM local; steps back for the rest of the day.',
-    commitment: 'One reminder at the scheduled time, then waits for you.',
+    badge: 'Light touch',
+    nonNegotiable: 'Butler decides when to check in, and does so sparingly. It lets go early.',
+    commitment: 'Butler follows up rarely, only when it clearly helps.',
   },
   Occasional: {
-    badge: 'Up to 2 nudges · ~3h spacing',
-    nonNegotiable: 'Morning check-in + one mid-afternoon follow-up (~3h spacing) if still open.',
-    commitment: 'Initial check-in + one polite follow-up ~3h later.',
+    badge: 'When something is open',
+    nonNegotiable: 'Butler picks the timing and follows up when an item is genuinely still open, then steps back if you are busy.',
+    commitment: 'Butler chooses when to come back based on how you respond.',
   },
   Regular: {
-    badge: 'Up to 4 nudges · 2h → 90m',
-    nonNegotiable: 'Morning check-in, then structured follow-ups every 2h → 90m until checked off.',
-    commitment: 'Follows up across 3–4 stages (2h → 90m) when an item slips.',
+    badge: 'Steady follow-through',
+    nonNegotiable: 'Butler keeps steady follow-through, adjusting spacing to how you respond and what is at stake.',
+    commitment: 'Butler decides each next touch itself and keeps at it while the item is open.',
   },
   Persistent: {
-    badge: 'Escalating 75m → 45m → 30m until done',
-    nonNegotiable: 'Keeps following up on an escalating 75m → 45m → 30m cadence until every daily non-negotiable is checked off (respecting quiet hours & daily wake cap).',
-    commitment: 'Actively pursues open commitments (75m → 45m → 30m) and preps next steps until resolved.',
+    badge: 'Persistent · model-chosen timing',
+    nonNegotiable: 'Butler maintains pressure on open items, but the model chooses each next touch from context—there are no preset reminder intervals. It may pause or stop if further nudges would not help (subject to quiet hours and the unanswered-nudge safety gate).',
+    commitment: 'Butler decides whether and when to push again and preps next steps until resolved. It picks the timing, not a fixed schedule.',
   },
 };
 
 function formatDateTime(iso, tz) {
-  if (!iso) return 'Auto-scheduled';
+  if (!iso) return 'No next time selected';
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return String(iso);
   const opts = {
@@ -1000,9 +1000,11 @@ function Page({ ctx }) {
             },
           },
             !isDone && h('span', null,
-              item.nudge_count > 0
-                ? `Nudged ${item.nudge_count}x · next at ${nextTimeStr || fullDueStr}`
-                : `Next check-in: ${fullDueStr}`,
+              item.status === 'submitted'
+                ? `Nudged ${item.nudge_count || 0}x · awaiting next touch decision`
+                : item.nudge_count > 0
+                  ? `Nudged ${item.nudge_count}x · next at ${nextTimeStr || fullDueStr}`
+                  : `Next check-in: ${fullDueStr}`,
             ),
             item.deadline_at && h('span', null, `Hard deadline: ${formatDateTime(item.deadline_at, effTz)}`),
             item.prep_hint && h('span', { style: { fontStyle: 'italic' } }, `Prep: ${item.prep_hint}`),
@@ -1522,7 +1524,7 @@ function Page({ ctx }) {
         h('div', { style: styles.cardHeader },
           h('div', null,
             h('h2', { style: styles.cardTitle }, 'How Hermes Follows Up'),
-            h('p', { style: styles.cardHint }, 'Tune coaching voice and how persistently Hermes nudges until daily non-negotiables are done.'),
+            h('p', { style: styles.cardHint }, 'Tune coaching voice and how persistent Butler should be. Butler decides the timing itself; these are preferences, not schedules.'),
           ),
         ),
 
@@ -1704,6 +1706,28 @@ function Page({ ctx }) {
               onChange: (e) => updatePref('dailyLimit', e.target.value === '' ? null : Number(e.target.value)),
               style: styles.input,
             }),
+          ),
+          h('div', null,
+            h('label', { style: { display: 'block', fontSize: 12.5, fontWeight: 560, marginBottom: 5 } }, 'Max unanswered proactive nudges'),
+            h('input', {
+              type: 'number', min: 0, max: 100, step: 1,
+              value: prefs.maxUnanswered ?? 5,
+              onChange: (e) => updatePref('maxUnanswered', Number(e.target.value)),
+              style: styles.input,
+            }),
+            h('span', { style: { display: 'block', fontSize: 11.5, color: 'var(--muted-foreground, #6e776f)', marginTop: 3 } },
+              'Stops after this many non-silent Butler follow-up replies go unanswered; silent checks do not count. A failed channel delivery may still consume the gate. 0 disables it.'),
+          ),
+          h('div', null,
+            h('label', { style: { display: 'block', fontSize: 12.5, fontWeight: 560, marginBottom: 5 } }, 'Minimum minutes between proactive messages'),
+            h('input', {
+              type: 'number', min: 0, max: 1440, step: 1,
+              value: prefs.minWakeGapMinutes ?? 1,
+              onChange: (e) => updatePref('minWakeGapMinutes', Number(e.target.value)),
+              style: styles.input,
+            }),
+            h('span', { style: { display: 'block', fontSize: 11.5, color: 'var(--muted-foreground, #6e776f)', marginTop: 3 } },
+              'Owner-set floor between wakes; 0 disables this gate.'),
           ),
           h('div', null,
             h('label', { style: { display: 'block', fontSize: 12.5, fontWeight: 560, marginBottom: 5 } }, 'Confirmed IANA Timezone'),
@@ -1890,7 +1914,7 @@ function Page({ ctx }) {
           ),
         ),
         h('p', { style: { margin: '-4px 0 12px', fontSize: 12, color: 'var(--muted-foreground, #6e776f)' } },
-          `Leave "First Check-in" blank to let Hermes auto-choose follow-up timing in ${effTz} based on your ${(prefs && prefs.persistence) || 'Occasional'} cadence.`,
+          `Leave "First Check-in" blank and Butler will wake right away and choose the follow-up timing itself in ${effTz} (your ${(prefs && prefs.persistence) || 'Occasional'} setting is a preference hint, not a schedule).`,
         ),
 
         h('div', { style: { marginBottom: 12 } },
@@ -2035,7 +2059,7 @@ function Page({ ctx }) {
                 },
                   h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 } },
                     h('span', { style: { fontWeight: 620, fontSize: 13.5 } },
-                      p === 'Persistent' ? 'Persistent — Keep bugging me until done ★' : p,
+                      p === 'Persistent' ? 'Persistent — Keep at it; timing stays model-chosen ★' : p,
                     ),
                     h('span', { style: { fontSize: 11.5, color: 'var(--muted-foreground, #6e776f)' } }, info.badge),
                   ),

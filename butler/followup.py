@@ -1,7 +1,8 @@
-"""Escalation state machine, auto-cadence, anti-burst coalescing, and action-first wake prompts.
+"""Model-driven follow-ups: safety gates, batching, and wake prompts.
 
-Pure policy functions operating on timezone-aware datetimes and Butler profile settings.
-Nothing in this module touches SQLite or dispatches network/channel I/O directly.
+There is NO fixed cadence here. The model decides when (and whether) to follow up: after every
+wake it must reschedule the item (butler_manage snooze/update), complete it, or stop it. Code only
+keeps safety gates (quiet hours) and batching. Tone/persistence are preference hints in the prompt.
 """
 from __future__ import annotations
 
@@ -58,32 +59,33 @@ TONE_PROFILES: dict[str, dict] = {
     },
 }
 
+# Preference HINTS shown to the model. No intervals, counts, or times: the model decides timing.
 PERSISTENCE_PROFILES: dict[str, dict] = {
     'Minimal': {
         'persistence': 'Minimal',
-        'summary': 'Single light touch per item (plus an optional 15m pre-deadline heads-up).',
-        'non_negotiable_cadence': '1 daily morning/initial check-in (+1 heads-up 15m before deadline if set), then next morning.',
-        'commitment_cadence': '1 check-in when due (+1 final reminder 15m before deadline if set), then marks submitted.',
+        'summary': 'Owner prefers a light touch: follow up rarely, only when it clearly helps.',
+        'hint': 'The owner wants you to follow up sparingly. Prefer a single well-timed nudge; let go early.',
     },
     'Occasional': {
         'persistence': 'Occasional',
-        'summary': 'Check in when due and follow up once 4h later before stepping back.',
-        'non_negotiable_cadence': 'Initial check-in, 1 follow-up after 4h, then rolls to next morning 08:30.',
-        'commitment_cadence': 'Initial check-in, 1 follow-up after 4h, then marks submitted.',
+        'summary': 'Owner prefers occasional follow-ups when something is genuinely still open.',
+        'hint': 'Follow up when something is genuinely open, and step back if they are busy or silent.',
     },
     'Regular': {
         'persistence': 'Regular',
-        'summary': 'Steady daytime follow-ups every 3h (tightening to 2h later) with pre-deadline heads-up.',
-        'non_negotiable_cadence': 'Every 3h (tightening to 2h after stage >= 2) up to 4 follow-ups/day + 15m deadline heads-up, then next morning.',
-        'commitment_cadence': 'Every 3h (tightening to 2h after stage >= 2) up to 4 follow-ups, continuing until deadline passes.',
+        'summary': 'Owner prefers steady follow-through on open items.',
+        'hint': 'Keep steady follow-through on open items; adjust spacing to how they respond and what is at stake.',
     },
     'Persistent': {
         'persistence': 'Persistent',
-        'summary': 'Keep following up with tightening intervals (75m -> 45m -> 30m) until completed, paused, or snoozed.',
-        'non_negotiable_cadence': 'Tightens 75m -> 45m -> 30m through the afternoon/evening, pauses for sleep/quiet hours, resumes next morning.',
-        'commitment_cadence': 'Tightens 75m -> 45m -> 30m continuously (respecting quiet hours) until completed, paused, or snoozed.',
+        'summary': 'Owner wants you to keep pursuing open items until they are done, paused, or snoozed.',
+        'hint': 'Keep pursuing open items until done, paused, or snoozed; tighten and go louder as stakes or deadlines rise, but stop if it would annoy rather than help.',
     },
 }
+
+
+WAKE_MARKER = 'Proactive Follow-Up Turn'
+VISIBLE_WAKE_MARKER = 'Butler check-in.'
 
 
 def _zone(effective_timezone: str) -> ZoneInfo:
@@ -134,19 +136,20 @@ def _parse_quiet_window(settings: dict | None) -> tuple[dtime, dtime] | None:
 
 
 def describe_cadence(settings: dict) -> dict:
-    """Summarize effective tone and persistence cadence in plain language."""
+    """Describe the owner's tone/persistence PREFERENCES. Timing is chosen by the model, not by code."""
     cfg = settings or {}
     tone_key = cfg.get('tone') if cfg.get('tone') in TONE_PROFILES else 'Balanced'
     pers_key = cfg.get('persistence') if cfg.get('persistence') in PERSISTENCE_PROFILES else 'Occasional'
     t_prof = TONE_PROFILES[tone_key]
     p_prof = PERSISTENCE_PROFILES[pers_key]
+    note = 'Model-driven: Butler decides when and whether to follow up; this is a preference, not a schedule.'
     return {
         'tone': tone_key,
         'tone_guide': t_prof['guide'],
         'persistence': pers_key,
-        'summary': f"{tone_key} tone · {pers_key} cadence: {p_prof['summary']}",
-        'non_negotiable_cadence': p_prof['non_negotiable_cadence'],
-        'commitment_cadence': p_prof['commitment_cadence'],
+        'summary': f"{tone_key} tone · {pers_key} persistence: {p_prof['summary']}",
+        'non_negotiable_cadence': note,
+        'commitment_cadence': note,
     }
 
 
@@ -193,70 +196,6 @@ def shift_out_of_quiet_hours(
     return end_utc
 
 
-def next_morning_checkin(
-    now: datetime,
-    effective_timezone: str = 'UTC',
-    *,
-    hour: int = 8,
-    minute: int = 30,
-    settings: dict | None = None,
-) -> datetime:
-    """Return aware UTC datetime for the next upcoming `hour:minute` in `effective_timezone`."""
-    now_utc = _require_aware_utc(now)
-    tz = _zone(effective_timezone)
-    local_now = now_utc.astimezone(tz)
-    target_local = datetime(
-        local_now.year, local_now.month, local_now.day,
-        hour, minute, 0, 0, tzinfo=tz,
-    )
-    if local_now >= target_local:
-        tmr = local_now.date() + timedelta(days=1)
-        target_local = datetime(tmr.year, tmr.month, tmr.day, hour, minute, 0, 0, tzinfo=tz)
-    result = target_local.astimezone(timezone.utc)
-    if settings is not None:
-        result = shift_out_of_quiet_hours(result, settings, effective_timezone)
-    return result
-
-
-def today_morning_checkin(
-    now: datetime,
-    effective_timezone: str = 'UTC',
-    *,
-    hour: int = 8,
-    minute: int = 30,
-    settings: dict | None = None,
-) -> datetime:
-    """Return aware UTC datetime for today's morning check-in (or `now` if already past `hour:minute` local)."""
-    now_utc = _require_aware_utc(now)
-    tz = _zone(effective_timezone)
-    local_now = now_utc.astimezone(tz)
-    morning_local = datetime(
-        local_now.year, local_now.month, local_now.day,
-        hour, minute, 0, 0, tzinfo=tz,
-    )
-    result = morning_local.astimezone(timezone.utc) if local_now < morning_local else now_utc
-    if settings is not None:
-        result = shift_out_of_quiet_hours(result, settings, effective_timezone)
-    return result
-
-
-def _tomorrow_morning_checkin(
-    now_utc: datetime,
-    effective_timezone: str,
-    settings: dict | None = None,
-    *,
-    hour: int = 8,
-    minute: int = 30,
-) -> datetime:
-    tz = _zone(effective_timezone)
-    local_now = now_utc.astimezone(tz)
-    tmr = local_now.date() + timedelta(days=1)
-    target_utc = datetime(tmr.year, tmr.month, tmr.day, hour, minute, 0, 0, tzinfo=tz).astimezone(timezone.utc)
-    if settings is not None:
-        target_utc = shift_out_of_quiet_hours(target_utc, settings, effective_timezone)
-    return target_utc
-
-
 def compute_initial_schedule(
     kind: str,
     now: datetime,
@@ -267,82 +206,29 @@ def compute_initial_schedule(
     deadline_at: datetime | None = None,
     interval_seconds: int | None = None,
 ) -> dict:
-    """Compute smart initial `due_at` and `deadline_at` when omitted, or normalize when supplied."""
+    """Normalize a schedule. No auto-cadence: an omitted due_at means 'due now' so the model is
+    woken and chooses the real follow-up time itself. Only explicit values are ever stored."""
     now_utc = _require_aware_utc(now)
-    cfg = settings or {}
-    persistence = cfg.get('persistence') if cfg.get('persistence') in PERSISTENCE_PROFILES else 'Occasional'
-    tz = _zone(effective_timezone)
-    local_now = now_utc.astimezone(tz)
     norm_kind = (kind or 'commitment').strip() or 'commitment'
-
     deadline_dt = _coerce_optional_utc(deadline_at)
-    if deadline_dt is None and norm_kind == 'non_negotiable':
-        dl_local = datetime(
-            local_now.year, local_now.month, local_now.day,
-            20, 30, 0, 0, tzinfo=tz,
-        )
-        if local_now >= dl_local:
-            tmr = local_now.date() + timedelta(days=1)
-            dl_local = datetime(tmr.year, tmr.month, tmr.day, 20, 30, 0, 0, tzinfo=tz)
-        deadline_dt = dl_local.astimezone(timezone.utc)
-
     if norm_kind == 'watch' and not interval_seconds:
-        interval_seconds = 900
-
+        interval_seconds = 900  # mechanical polling interval for a change-watcher; override via interval_seconds
     if due_at is not None:
-        due_dt = _require_aware_utc(due_at)
         return {
-            'due_at': due_dt,
+            'due_at': _require_aware_utc(due_at),
             'deadline_at': deadline_dt,
             'interval_seconds': interval_seconds,
             'schedule_reason': 'explicit_due_at',
         }
-
-    if norm_kind == 'non_negotiable':
-        if local_now.hour < 9:
-            due_dt = datetime(
-                local_now.year, local_now.month, local_now.day,
-                8, 30, 0, 0, tzinfo=tz,
-            ).astimezone(timezone.utc)
-            reason = 'non_negotiable_morning_0830'
-        elif local_now.hour < 20:
-            delta = timedelta(minutes=60) if persistence in ('Persistent', 'Regular') else timedelta(hours=2)
-            due_dt = now_utc + delta
-            reason = f'non_negotiable_same_day_{persistence.lower()}'
-        else:
-            due_dt = _tomorrow_morning_checkin(now_utc, effective_timezone, hour=8, minute=30)
-            reason = 'non_negotiable_next_morning_0830'
-    elif norm_kind == 'watch':
-        due_dt = now_utc + timedelta(minutes=15)
-        reason = 'watch_15m_interval'
+    if norm_kind == 'watch':
+        due_dt, reason = now_utc + timedelta(seconds=interval_seconds), 'watch_poll_interval'
     else:
-        # 'commitment', 'open_loop', 'check_in', and any custom one-off responsibility kind
-        if persistence == 'Persistent':
-            due_dt = now_utc + timedelta(minutes=75)
-            reason = 'commitment_persistent_75m'
-        elif persistence == 'Regular':
-            due_dt = now_utc + timedelta(hours=3)
-            reason = 'commitment_regular_3h'
-        elif persistence == 'Occasional':
-            if local_now.hour >= 18:
-                due_dt = next_morning_checkin(now_utc, effective_timezone, hour=9, minute=30)
-                reason = 'commitment_occasional_next_morning_0930'
-            else:
-                due_dt = now_utc + timedelta(hours=4)
-                reason = 'commitment_occasional_4h'
-        else:  # 'Minimal'
-            if local_now.hour < 12:
-                due_dt = now_utc + timedelta(hours=6)
-                reason = 'commitment_minimal_6h'
-            else:
-                due_dt = next_morning_checkin(now_utc, effective_timezone, hour=9, minute=30)
-                reason = 'commitment_minimal_next_morning_0930'
-
-    shifted_due = shift_out_of_quiet_hours(due_dt, cfg, effective_timezone)
-    if shifted_due != due_dt:
-        reason = f'{reason}_quiet_shifted'
+        due_dt, reason = now_utc, 'due_now_model_decides'
+    shifted = shift_out_of_quiet_hours(due_dt, settings or {}, effective_timezone)
+    if shifted != due_dt:
+        reason += '_quiet_shifted'
     return {
-        'due_at': shifted_due,
+        'due_at': shifted,
         'deadline_at': deadline_dt,
         'interval_seconds': interval_seconds,
         'schedule_reason': reason,
@@ -369,326 +255,39 @@ def next_followup_step(
     effective_timezone: str = 'UTC',
     available_channels: tuple[str, ...] = ('check_in', 'push'),
 ) -> FollowupDecision:
-    """Pure escalation & cadence engine for a due (`due_at <= now`) active responsibility."""
+    """Decide ONLY whether to wake now. Code never picks the next follow-up time.
+
+    After a wake the item moves to 'submitted' (awaiting the model). The model must reschedule it
+    via butler_manage (snooze/update), or complete/stop it. Unrescheduled items are surfaced in the
+    model's context every turn. Recurring items with a model-chosen interval_seconds just recur.
+    """
     now_utc = _require_aware_utc(now)
     cfg = settings or {}
     tz_name = effective_timezone or item.get('timezone') or 'UTC'
-    tz = _zone(tz_name)
-    local_now = now_utc.astimezone(tz)
-    local_hour = local_now.hour
-
     due_at = _coerce_optional_utc(item.get('due_at')) or now_utc
-    deadline = _coerce_optional_utc(item.get('deadline_at'))
     raw_stage = item.get('stage', item.get('followup_stage', -1))
     stage = int(-1 if raw_stage is None else raw_stage)
-    kind = str(item.get('kind') or 'commitment')
     metadata = item.get('metadata') if isinstance(item.get('metadata'), dict) else {}
-    avail = set(available_channels or ('check_in', 'push'))
+
+    if now_utc < due_at:
+        return FollowupDecision(False, [], stage, due_at, 'active', 'low', reason='not_yet_due')
+
+    quiet_resume = shift_out_of_quiet_hours(now_utc, cfg, tz_name)  # safety gate: quiet hours
+    if quiet_resume > now_utc and not metadata.get('bypass_quiet_hours'):
+        return FollowupDecision(False, [], stage, quiet_resume, 'active', 'low', reason='quiet_hours_deferred')
 
     interval_raw = item.get('interval_seconds')
     if interval_raw is not None and int(interval_raw) > 0:
-        interval = timedelta(seconds=int(interval_raw))
+        interval = timedelta(seconds=int(interval_raw))  # interval was chosen by the model/user
         steps = max(1, (now_utc - due_at) // interval + 1)
         next_due = shift_out_of_quiet_hours(due_at + steps * interval, cfg, tz_name)
         if next_due <= now_utc:
             next_due = now_utc + interval
-        return FollowupDecision(
-            should_wake=True,
-            actions=['check_in'],
-            next_stage=stage + 1,
-            next_due_at=next_due,
-            next_status='active',
-            urgency='normal',
-            heads_up=False,
-            reason='recurring_interval',
-        )
+        return FollowupDecision(True, ['check_in'], stage + 1, next_due, 'active', 'normal',
+                                reason='model_chosen_interval')
 
-    if now_utc < due_at:
-        return FollowupDecision(
-            should_wake=False,
-            actions=[],
-            next_stage=stage,
-            next_due_at=due_at,
-            next_status='active',
-            urgency='low',
-            heads_up=False,
-            reason='not_yet_due',
-        )
-
-    quiet_resume = shift_out_of_quiet_hours(now_utc, cfg, tz_name)
-    if quiet_resume > now_utc and not metadata.get('bypass_quiet_hours'):
-        if kind == 'non_negotiable':
-            quiet_resume = max(quiet_resume, next_morning_checkin(quiet_resume, tz_name, settings=cfg))
-        return FollowupDecision(
-            should_wake=False,
-            actions=[],
-            next_stage=stage,
-            next_due_at=quiet_resume,
-            next_status='active',
-            urgency='low',
-            heads_up=False,
-            reason='quiet_hours_deferred',
-        )
-
-    persistence = cfg.get('persistence') if cfg.get('persistence') in PERSISTENCE_PROFILES else 'Occasional'
-    next_stage = stage + 1
-    initial_action = 'morning_briefing' if (kind == 'non_negotiable' and local_hour < 11 and stage < 0) else 'check_in'
-
-    if persistence == 'Minimal':
-        if stage < 0:
-            can_heads_up = (
-                deadline is not None
-                and (deadline - now_utc) > timedelta(minutes=30)
-                and not metadata.get('heads_up_sent')
-            )
-            if can_heads_up:
-                heads_at = shift_out_of_quiet_hours(deadline - timedelta(minutes=15), cfg, tz_name)
-                if heads_at <= now_utc:
-                    heads_at = now_utc + timedelta(minutes=15)
-                return FollowupDecision(
-                    should_wake=True,
-                    actions=[initial_action],
-                    next_stage=0,
-                    next_due_at=heads_at,
-                    next_status='active',
-                    urgency='low',
-                    heads_up=False,
-                    reason='minimal_initial_with_heads_up',
-                )
-            if kind == 'non_negotiable':
-                nxt = _tomorrow_morning_checkin(now_utc, tz_name, settings=cfg)
-                return FollowupDecision(
-                    should_wake=True,
-                    actions=[initial_action],
-                    next_stage=0,
-                    next_due_at=nxt,
-                    next_status='active',
-                    urgency='low',
-                    heads_up=False,
-                    reason='minimal_non_negotiable_daily',
-                )
-            return FollowupDecision(
-                should_wake=True,
-                actions=[initial_action],
-                next_stage=0,
-                next_due_at=None,
-                next_status='submitted',
-                urgency='low',
-                heads_up=False,
-                reason='minimal_single_wake',
-            )
-
-        # Pre-deadline heads-up / final reminder wake in Minimal mode
-        if kind == 'non_negotiable':
-            nxt = _tomorrow_morning_checkin(now_utc, tz_name, settings=cfg)
-            return FollowupDecision(
-                should_wake=True,
-                actions=['heads_up'],
-                next_stage=next_stage,
-                next_due_at=nxt,
-                next_status='active',
-                urgency='normal',
-                heads_up=True,
-                reason='minimal_deadline_heads_up',
-            )
-        return FollowupDecision(
-            should_wake=True,
-            actions=['heads_up'],
-            next_stage=next_stage,
-            next_due_at=None,
-            next_status='submitted',
-            urgency='normal',
-            heads_up=True,
-            reason='minimal_final_heads_up',
-        )
-
-    if persistence == 'Occasional':
-        if stage < 0:
-            nxt = shift_out_of_quiet_hours(now_utc + timedelta(hours=4), cfg, tz_name)
-            return FollowupDecision(
-                should_wake=True,
-                actions=[initial_action],
-                next_stage=0,
-                next_due_at=nxt,
-                next_status='active',
-                urgency='normal',
-                heads_up=False,
-                reason='occasional_first_checkin',
-            )
-        follow_action = 'push' if 'push' in avail else 'check_in'
-        if kind == 'non_negotiable':
-            nxt = _tomorrow_morning_checkin(now_utc, tz_name, settings=cfg)
-            return FollowupDecision(
-                should_wake=True,
-                actions=[follow_action],
-                next_stage=max(1, next_stage),
-                next_due_at=nxt,
-                next_status='active',
-                urgency='normal',
-                heads_up=False,
-                reason='occasional_roll_next_morning',
-            )
-        return FollowupDecision(
-            should_wake=True,
-            actions=[follow_action],
-            next_stage=max(1, next_stage),
-            next_due_at=None,
-            next_status='submitted',
-            urgency='normal',
-            heads_up=False,
-            reason='occasional_final_checkin',
-        )
-
-    if persistence == 'Regular':
-        is_near_deadline = (
-            deadline is not None
-            and timedelta(seconds=0) <= (deadline - now_utc) <= timedelta(minutes=20)
-            and not metadata.get('heads_up_sent')
-        )
-        if is_near_deadline:
-            actions = ['heads_up']
-            urgency = 'high'
-            heads_flag = True
-        elif stage < 0:
-            actions = [initial_action]
-            urgency = 'normal'
-            heads_flag = False
-        elif stage >= 2:
-            actions = ['push' if 'push' in avail else 'check_in']
-            urgency = 'high'
-            heads_flag = False
-        else:
-            actions = ['check_in']
-            urgency = 'normal'
-            heads_flag = False
-
-        gap = timedelta(hours=2) if stage >= 2 else timedelta(hours=3)
-        heads_up_candidate = (
-            deadline - timedelta(minutes=15)
-            if (deadline is not None and not metadata.get('heads_up_sent'))
-            else None
-        )
-
-        # Up to 4 check-ins/day (stages -1, 0, 1, 2 -> rolling once stage >= 3)
-        if stage >= 3:
-            if kind == 'non_negotiable':
-                if heads_up_candidate is not None and heads_up_candidate > now_utc + timedelta(minutes=2):
-                    nxt = shift_out_of_quiet_hours(heads_up_candidate, cfg, tz_name)
-                    reason = 'regular_pre_deadline_heads_up'
-                else:
-                    nxt = _tomorrow_morning_checkin(now_utc, tz_name, settings=cfg)
-                    reason = 'regular_roll_next_morning'
-                return FollowupDecision(
-                    should_wake=True,
-                    actions=actions,
-                    next_stage=next_stage,
-                    next_due_at=nxt,
-                    next_status='active',
-                    urgency=urgency,
-                    heads_up=heads_flag,
-                    reason=reason,
-                )
-            if deadline is not None and now_utc < deadline and not is_near_deadline:
-                cand = now_utc + gap
-                if heads_up_candidate is not None and now_utc < heads_up_candidate < cand:
-                    cand = heads_up_candidate
-                elif deadline < cand:
-                    cand = deadline
-                nxt = shift_out_of_quiet_hours(cand, cfg, tz_name)
-                return FollowupDecision(
-                    should_wake=True,
-                    actions=actions,
-                    next_stage=next_stage,
-                    next_due_at=nxt,
-                    next_status='active',
-                    urgency='high',
-                    heads_up=heads_flag,
-                    reason='regular_until_deadline',
-                )
-            return FollowupDecision(
-                should_wake=True,
-                actions=actions,
-                next_stage=next_stage,
-                next_due_at=None,
-                next_status='submitted',
-                urgency=urgency,
-                heads_up=heads_flag,
-                reason='regular_cap_reached',
-            )
-
-        cand = now_utc + gap
-        if heads_up_candidate is not None and now_utc < heads_up_candidate < cand:
-            cand = heads_up_candidate
-            reason = 'regular_pre_deadline_heads_up'
-        else:
-            reason = 'regular_tightened_2h' if stage >= 2 else 'regular_3h'
-        nxt = shift_out_of_quiet_hours(cand, cfg, tz_name)
-        return FollowupDecision(
-            should_wake=True,
-            actions=actions,
-            next_stage=next_stage,
-            next_due_at=nxt,
-            next_status='active',
-            urgency=urgency,
-            heads_up=heads_flag,
-            reason=reason,
-        )
-
-    # 'Persistent' — dynamic tightening cadence, never stops until completed/paused/snoozed
-    deadline_within_3h = deadline is not None and (deadline - now_utc) <= timedelta(hours=3)
-    if stage >= 3 or local_hour >= 17 or deadline_within_3h:
-        gap = timedelta(minutes=30)
-        urgency = 'critical'
-        actions = ['evening_push']
-        if 'voice_note' in avail or bool(metadata.get('allow_voice')):
-            actions.append('voice_note')
-        reason = 'persistent_critical_30m'
-    elif stage in (1, 2) or 15 <= local_hour < 17:
-        gap = timedelta(minutes=45)
-        urgency = 'high'
-        actions = ['push']
-        reason = 'persistent_escalated_45m'
-    else:
-        gap = timedelta(minutes=75)
-        urgency = 'normal'
-        actions = ['morning_briefing' if (local_hour < 11 and stage < 0) else 'check_in']
-        reason = 'persistent_initial_75m'
-
-    cand = now_utc + gap
-    cand_local = cand.astimezone(tz)
-    shifted = shift_out_of_quiet_hours(cand, cfg, tz_name)
-    past_evening_sleep_boundary = (
-        kind == 'non_negotiable'
-        and bool(cfg.get('quietEnabled'))
-        and (cand_local.hour >= 22 or (cand_local.date() > local_now.date() and cand_local.hour < 8))
-    )
-    if shifted > cand or past_evening_sleep_boundary:
-        if kind == 'non_negotiable':
-            nxt = max(shifted, next_morning_checkin(now_utc, tz_name, settings=cfg))
-        else:
-            nxt = shifted
-        reason = f'{reason}_sleep_shifted'
-    else:
-        nxt = cand
-
-    if nxt <= now_utc:
-        nxt = now_utc + gap
-
-    heads_flag = (
-        deadline is not None
-        and timedelta(seconds=0) <= (deadline - now_utc) <= timedelta(minutes=30)
-        and not metadata.get('heads_up_sent')
-    )
-    return FollowupDecision(
-        should_wake=True,
-        actions=actions,
-        next_stage=next_stage,
-        next_due_at=nxt,
-        next_status='active',
-        urgency=urgency,
-        heads_up=heads_flag,
-        reason=reason,
-    )
+    return FollowupDecision(True, ['check_in'], stage + 1, None, 'submitted', 'normal',
+                            reason='awaiting_model_reschedule')
 
 
 class _DecisionMap(dict):
@@ -737,6 +336,40 @@ def _format_local_stamp(dt_val: datetime | str | None, tz: ZoneInfo) -> str:
     return loc.strftime('%Y-%m-%d %H:%M %Z')
 
 
+JUDGMENT_RULES = (
+    'JUDGMENT (how a good chief of staff follows up):\n'
+    '1. Read their availability before nudging: recent chat, calendar/time of day, quiet hours, anything they said '
+    '("not now", "busy", "later"). If busy or overloaded, back off or batch; do not stop caring about the item.\n'
+    '2. Learn from reactions: check recent chat for how they responded to earlier nudges like this one. If they '
+    'ignored or brushed off this kind of message, do less of it; if they engaged, keep doing it. Save durable '
+    'preferences ("don\'t remind me about X") to memory immediately.\n'
+    '3. Urgent or blocking with a real time window (deadline, money, something that expires): come back sooner and '
+    'more often, and go louder (voice note where available) only if it truly matters. Casual items: later and lighter.\n'
+    '4. Never repeat a message word for word. Each nudge must add something: a new fact, your best guess, a prepared '
+    'draft, or a smaller next step. No guilt-tripping, no machinery, ids or tool talk.\n'
+    '5. If you are blocked on them, say exactly what you need. If the unanswered count below is rising, space out '
+    'further or stop; continuing when it would annoy rather than help is the wrong call.\n'
+    '6. Never invent a deadline, date, business closing time, or urgency. Preserve only time boundaries the user stated or you verified with a tool. Treat a stated window as a real boundary: if they say “this week,” do not schedule a wake after that week ends unless they extend the window; if it remains unresolved, pause it or ask at the next real exchange instead of silently rolling it into next week. Clarify an ambiguous cutoff before the window closes.\n'
+    '7. Do not create a second responsibility for the same open task. Reuse and reschedule the existing item; after a reply, choose one next checkpoint rather than stacking overlapping reminders.\n'
+    '8. A promise to check back counts only once the item shows a scheduled next time (butler_manage list).\n'
+    '9. Honor timing and outreach boundaries literally. Never wake before a user-stated time they plan to act. If they say “ask me later, but make it the last nudge today,” schedule at most one later check-in that day; do not add any more that day. If they say only “last nudge today” without asking for another, do not schedule another that day.\n'
+    '10. After an explicit ETA, do not wake before it. Make at most one check after the ETA; if they do not respond, do not schedule another countdown until they reply or materially new information changes the situation. This applies even when the ETA falls after an external deadline.\n'
+    '11. No per-level intervals, escalation ladder, or fixed follow-up cadence. Choose every next time from this person’s context and what they said.'
+)
+
+
+def _engagement_line(engagement: dict | None, now_utc: datetime, tz: ZoneInfo) -> str:
+    if not engagement:
+        return 'ENGAGEMENT: no history recorded yet.'
+    last_user = engagement.get('last_user_at')
+    unanswered = int(engagement.get('unanswered_wakes') or 0)
+    when = _format_local_stamp(last_user, tz) if last_user else 'never seen'
+    return (
+        f'ENGAGEMENT: unanswered proactive nudges since their last real message: {unanswered}; '
+        f'their last message: {when}. Use this to decide whether to nudge, wait longer, or let it go.'
+    )
+
+
 def build_action_first_wake_prompt(
     items: list[dict],
     decisions: dict[str, FollowupDecision] | list[FollowupDecision],
@@ -744,8 +377,9 @@ def build_action_first_wake_prompt(
     *,
     now: datetime,
     effective_timezone: str = 'UTC',
+    engagement: dict | None = None,
 ) -> str:
-    """Build an action-first, tone-calibrated wake prompt for one coalesced route batch."""
+    """Wake prompt: hands the model the situation and ownership of what happens next."""
     now_utc = _require_aware_utc(now)
     cfg = settings or {}
     tz = _zone(effective_timezone)
@@ -756,25 +390,15 @@ def build_action_first_wake_prompt(
     tone_rules = TONE_PROFILES[tone]['voice_rules']
 
     item_lines: list[str] = []
-    max_nudge_number = 1
-    wants_voice = False
-    decisions_is_mapping = isinstance(decisions, dict)
-    decisions_seq = list(decisions) if not decisions_is_mapping and decisions is not None else []
+    recurring = False
     for idx, item in enumerate(items, start=1):
         item_id = str(item.get('id') or f'item-{idx}')
         title = str(item.get('title') or 'Untitled responsibility').strip()
         kind = str(item.get('kind') or 'commitment')
         nudge_number = int(item.get('nudge_count') or 0) + 1
-        max_nudge_number = max(max_nudge_number, nudge_number)
-        if decisions_is_mapping:
-            decision = decisions.get(item_id)
-        else:
-            decision = decisions_seq[idx - 1] if (idx - 1) < len(decisions_seq) else None
-        urgency = getattr(decision, 'urgency', None) or 'normal'
-        dec_actions = getattr(decision, 'actions', None) or ()
-        actions = ', '.join(dec_actions) if dec_actions else 'check_in'
-        if 'voice_note' in dec_actions:
-            wants_voice = True
+        if item.get('interval_seconds'):
+            recurring = True
+        last = _format_local_stamp(item.get('last_nudged_at'), tz)
         deadline_str = _format_local_stamp(item.get('deadline_at'), tz)
         meta = item.get('metadata') if isinstance(item.get('metadata'), dict) else {}
         extras: list[str] = []
@@ -788,47 +412,39 @@ def build_action_first_wake_prompt(
         extra_suffix = f" | {' ; '.join(extras)}" if extras else ''
         item_lines.append(
             f"- [{idx}] id={item_id} | title=\"{title}\" | kind={kind} | check_in=#{nudge_number} | "
-            f"urgency={urgency} | mode={actions} | deadline={deadline_str}{extra_suffix}"
+            f"last_nudged={last} | deadline={deadline_str}{extra_suffix}"
         )
-
-    persistence_guidance = f'Persistence={persistence} ({cadence_info["summary"]}).'
-    if persistence == 'Persistent' and max_nudge_number >= 3:
-        persistence_guidance += (
-            ' You are following up again (check-in #3+) because this is on their active/non-negotiables list—'
-            'acknowledge that directly and ask for either concrete action right now or an explicit snooze time.'
-        )
-    elif len(items) > 1:
-        persistence_guidance += (
-            f' Combine all {len(items)} due items into one cohesive, natural check-in instead of separate alerts.'
-        )
-
-    voice_guidance = (
-        ' Voice escalation is active for this urgent follow-up: if text_to_speech is appropriate on this channel, '
-        'you may pair your concise message with a short spoken check-in.'
-        if wants_voice else ''
-    )
 
     sections = [
-        f"Proactive Follow-Up Turn ({local_now.strftime('%A %Y-%m-%d %H:%M %Z')}, timezone={effective_timezone}):",
-        'Due responsibilities to address in this turn:',
+        f"{WAKE_MARKER} ({local_now.strftime('%A %Y-%m-%d %H:%M %Z')}, timezone={effective_timezone}):",
+        'Open responsibilities that came due:',
         *item_lines,
         '',
         (
-            'ACTION-FIRST DIRECTIVE: Do NOT act like a dumb alarm clock that merely parrots task titles. '
-            'Before writing to the user, check whether there is a quick ~30-second prep step you can execute '
-            'right now with your tools—such as checking a relevant file/note/status, drafting the message or email '
-            'they need to send, summarizing what is blocking progress, or laying out an effortless 2-minute first '
-            'micro-step so starting feels frictionless.'
+            'YOU OWN THE FOLLOW-UP. No schedule decides this for you. Before writing, look at what changed: '
+            'recent chat, how they responded to earlier nudges, calendar/time of day, what is at stake. '
+            'Then decide: nudge now (adding something new, not repeating yourself), stay silent if they are '
+            'busy or it is not worth it, or let it go because it is done or they said not now.'
         ),
         (
-            f'TONE & PERSISTENCE POSTURE (tone={tone}, persistence={persistence}): {tone_rules} '
-            f'{persistence_guidance}{voice_guidance}'
+            'ACTION-FIRST: do not parrot the title. If a ~30-second prep step helps (check a file/status, draft '
+            'the message, summarize the blocker, shrink it to a 2-minute first step), do it before messaging.'
         ),
         (
-            'OUTPUT RULE: Write directly to the user like a thoughtful human assistant—never emit bracketed '
-            'system wake banners, robotic headers, or raw internal JSON. If an item was already completed, '
-            'rescheduled, or needs to be paused based on what you find, call butler_manage (complete, snooze, pause) '
-            'so state stays accurate.'
+            'BEFORE YOU END THIS TURN, close the loop for every item above using butler_manage: '
+            'snooze with `until` set to the next touch YOU choose, or complete/stop if finished or dropped, or pause. '
+            + ('(Items with a recurring interval will recur on their own interval; you may still change it.) ' if recurring else '')
+            + 'If you do nothing the item stays "awaiting your decision" and will NOT wake again by itself.'
+        ),
+        _engagement_line(engagement, now_utc, tz),
+        JUDGMENT_RULES,
+        (
+            f'OWNER PREFERENCES (hints, not a schedule): tone={tone}: {tone_rules} '
+            f'persistence={persistence}: {PERSISTENCE_PROFILES[persistence]["hint"]}'
+        ),
+        (
+            'OUTPUT RULE: Write directly to the user like a thoughtful human assistant. Never emit bracketed '
+            'system banners, raw ids, or tool talk. If you decide not to message, end with just [SILENT].'
         ),
     ]
     return '\n'.join(sections)

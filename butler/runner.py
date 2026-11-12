@@ -21,6 +21,11 @@ from .watchers import WatchPolicy, WatcherEngine
 
 log = logging.getLogger(__name__)
 
+try:
+    from .followup import VISIBLE_WAKE_MARKER
+except ImportError:
+    VISIBLE_WAKE_MARKER = 'Butler check-in.'
+
 _SHARED_RUNNER_STATE = sys.modules.setdefault(
     '_butler_active_runner_state',
     {'lock': threading.Lock(), 'runner': None},
@@ -84,19 +89,6 @@ def _open_default_route_registry(db_path):
 RouteRegistry = _open_default_route_registry
 
 
-def _call_today_morning_checkin(now, effective_timezone='UTC', *, hour=8, minute=30, settings=None):
-    try:
-        from . import followup as _followup
-        return _followup.today_morning_checkin(
-            now, effective_timezone, hour=hour, minute=minute, settings=settings,
-        )
-    except ImportError:
-        tz = ZoneInfo(effective_timezone or 'UTC')
-        loc = now.astimezone(tz)
-        morning = datetime.combine(loc.date(), time(hour, minute), tzinfo=tz)
-        return morning.astimezone(timezone.utc)
-
-
 def _call_next_followup_step(
     item, now, settings, *, effective_timezone='UTC', available_channels=('check_in', 'push'),
 ):
@@ -110,37 +102,13 @@ def _call_next_followup_step(
             available_channels=available_channels,
         )
     except ImportError:
+        # No built-in cadence: wake now, then wait for the model to reschedule or close the item.
         raw_stage = item.get('stage', item.get('followup_stage', -1))
-        stage = int(-1 if raw_stage is None else raw_stage) + 1
-        interval = item.get('interval_seconds')
-        kind = item.get('kind') or 'commitment'
-        if interval is not None:
-            due = item.get('due_at') or now
-            step = timedelta(seconds=int(interval))
-            steps = max(1, (now - due) // step + 1)
-            next_due = due + steps * step
-            next_status = 'active'
-        elif kind == 'non_negotiable':
-            next_due = now + timedelta(hours=4)
-            next_status = 'active'
-        else:
-            persistence = (settings or {}).get('persistence', 'Occasional')
-            max_stages = {'Minimal': 0, 'Occasional': 1, 'Regular': 2, 'Persistent': 3}.get(persistence, 1)
-            if stage <= max_stages:
-                next_due = now + timedelta(hours=2)
-                next_status = 'active'
-            else:
-                next_due = None
-                next_status = 'submitted'
         return _FallbackFollowupDecision(
-            should_wake=True,
-            actions=('check_in',),
-            next_stage=stage,
-            next_due_at=next_due,
-            next_status=next_status,
-            urgency='normal',
-            heads_up=False,
-            reason='due',
+            should_wake=True, actions=('check_in',),
+            next_stage=int(-1 if raw_stage is None else raw_stage) + 1,
+            next_due_at=None, next_status='submitted', urgency='normal', heads_up=False,
+            reason='awaiting_model_reschedule',
         )
 
 
@@ -164,11 +132,12 @@ def _call_coalesce_due_batch(items_and_decisions):
         return [_FallbackWakeBatch(rid, grouped[rid][0], grouped[rid][1]) for rid in order]
 
 
-def _call_build_action_first_wake_prompt(items, decisions, settings, *, now, effective_timezone='UTC'):
+def _call_build_action_first_wake_prompt(items, decisions, settings, *, now, effective_timezone='UTC', engagement=None):
     try:
         from . import followup as _followup
         return _followup.build_action_first_wake_prompt(
             items, decisions, settings, now=now, effective_timezone=effective_timezone,
+            engagement=engagement,
         )
     except ImportError:
         tone = (settings or {}).get('tone', 'Balanced')
@@ -195,7 +164,6 @@ def _call_build_action_first_wake_prompt(items, decisions, settings, *, now, eff
         return '\n'.join(lines)
 
 
-today_morning_checkin = _call_today_morning_checkin
 next_followup_step = _call_next_followup_step
 coalesce_due_batch = _call_coalesce_due_batch
 build_action_first_wake_prompt = _call_build_action_first_wake_prompt
@@ -333,6 +301,20 @@ class Runner:
                 log.debug('Butler could not record wake log for %s', item_id, exc_info=True)
 
     @staticmethod
+    def _engagement_gate(store, settings: dict, now: datetime) -> str | None:
+        """Owner-set safety gates (not model decisions): stop piling nudges on someone who is not answering,
+        and keep a minimum gap between proactive wakes. 0 disables a gate."""
+        eng = store.get_engagement()
+        cap = int(settings.get('maxUnanswered', 0) or 0)
+        if cap and eng['unanswered_wakes'] >= cap:
+            return 'max_unanswered'
+        gap = int(settings.get('minWakeGapMinutes', 0) or 0)
+        last = eng.get('last_wake_at')
+        if gap and last is not None and (now - last) < timedelta(minutes=gap):
+            return 'min_wake_gap'
+        return None
+
+    @staticmethod
     def _defer_or_snooze(store, item_id: str, token: str, now: datetime, until: datetime) -> None:
         if hasattr(store, 'defer_claim'):
             store.defer_claim(item_id, token, now, until=until)
@@ -458,17 +440,22 @@ class Runner:
 
             prompt = build_action_first_wake_prompt(
                 cur_items, cur_decisions_map, settings, now=now, effective_timezone=effective_timezone,
+                engagement=(store.get_engagement() if hasattr(store, 'get_engagement') else None),
             )
             accepted = False
             err_detail = ''
+            pending_wake_id = None
             try:
+                if not hasattr(store, 'enqueue_pending_wake'):
+                    raise RuntimeError('store does not support hidden wake context')
+                pending_wake_id = store.enqueue_pending_wake(batch.route_id, prompt, now)
                 if route['kind'] == 'session_key':
                     accepted = bool(
-                        self.ctx.inject_message(prompt, role='user', session_key=route['session_key'])
+                        self.ctx.inject_message(VISIBLE_WAKE_MARKER, role='user', session_key=route['session_key'])
                     )
                 else:
                     accepted = bool(
-                        self.ctx.inject_message(prompt, role='user', origin=route['origin'])
+                        self.ctx.inject_message(VISIBLE_WAKE_MARKER, role='user', origin=route['origin'])
                     )
             except Exception as exc:
                 log.warning('Butler wake injection failed for route %s', batch.route_id, exc_info=True)
@@ -483,6 +470,8 @@ class Runner:
                 injected_batches += 1
                 woken_items += len(cur_items)
             else:
+                if pending_wake_id is not None and hasattr(store, 'cancel_pending_wake'):
+                    store.cancel_pending_wake(pending_wake_id)
                 for it, dec in cur_pairs:
                     store.release_claim(it['id'], it['claim_token'], now)
                     actions_str = ','.join(dec.actions) if getattr(dec, 'actions', None) else 'check_in'
@@ -514,7 +503,7 @@ class Runner:
                 local_date = local_time(now, effective_timezone).date().isoformat()
                 reset_count = 0
                 if hasattr(store, 'reset_daily_non_negotiables'):
-                    morning_due = today_morning_checkin(now, effective_timezone, settings=settings)
+                    morning_due = now  # no fixed morning time: reopened non-negotiables wake the model, which picks the time
                     reset_count = int(store.reset_daily_non_negotiables(local_date, morning_due) or 0)
 
                 claimed = Scheduler(store, batch_size=10, lease_seconds=300).claim(now)
@@ -596,6 +585,28 @@ class Runner:
                             'watches_unchanged': watches_unchanged,
                             'reset_non_negotiables': reset_count,
                             'policy_reason': reason,
+                        }
+
+                if not force_wake and hasattr(store, 'get_engagement'):
+                    held = self._engagement_gate(store, settings, now)
+                    if held:
+                        if held == 'max_unanswered' and hasattr(store, 'park_claim_for_reply'):
+                            for item, _ in routable:
+                                store.park_claim_for_reply(item['id'], item['claim_token'], now)
+                                self._record_log(store, item['id'], now, 'engagement_gate', 'parked', held)
+                        elif held == 'min_wake_gap':
+                            eng = store.get_engagement()
+                            next_allowed = eng['last_wake_at'] + timedelta(minutes=int(settings.get('minWakeGapMinutes') or 0))
+                            for item, _ in routable:
+                                self._defer_or_snooze(store, item['id'], item['claim_token'], now, next_allowed)
+                                self._record_log(store, item['id'], now, 'engagement_gate', 'deferred', held)
+                        else:
+                            for item, _ in routable:
+                                store.release_claim(item['id'], item['claim_token'], now)
+                        return {
+                            'claimed': len(claimed), 'injected': 0, 'woken_items': 0, 'deferred': 0,
+                            'skipped_unroutable': skipped_unroutable, 'watches_unchanged': watches_unchanged,
+                            'reset_non_negotiables': reset_count, 'policy_reason': held,
                         }
 
                 waking_pairs = []

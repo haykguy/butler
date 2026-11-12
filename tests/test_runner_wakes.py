@@ -277,6 +277,10 @@ class UpgradedStoreAdapter:
     def close(self):
         self._base.close()
 
+    def __getattr__(self, name):
+        # forward any store method the adapter does not wrap (e.g. engagement tracking)
+        return getattr(self._base, name)
+
 
 def _make_harness(tmp_path):
     state = {'extras': {}, 'logs': []}
@@ -326,18 +330,20 @@ def test_runner_coalesces_by_route_and_supports_session_key_and_origin(tmp_path)
     assert res['woken_items'] == 3
     assert len(ctx.calls) == 2
 
-    first_prompt, first_kw = ctx.calls[0]
+    first_marker, first_kw = ctx.calls[0]
+    assert first_marker == 'Butler check-in.'
     assert first_kw == {'role': 'user', 'session_key': 'tui:local:abc'}
-    assert 'Send investor deck' in first_prompt and 'Review PR #42' in first_prompt
-
-    second_prompt, second_kw = ctx.calls[1]
+    second_marker, second_kw = ctx.calls[1]
+    assert second_marker == 'Butler check-in.'
     assert second_kw == {
         'role': 'user',
         'origin': {'platform': 'telegram', 'chat_id': '777', 'user_id': '777', 'chat_type': 'dm'},
     }
-    assert 'Call dentist' in second_prompt
-
     db = store_factory()
+    first_hidden = db.db.execute("SELECT payload FROM pending_wakes WHERE route_id='r-tui'").fetchone()['payload']
+    second_hidden = db.db.execute("SELECT payload FROM pending_wakes WHERE route_id='r-tg'").fetchone()['payload']
+    assert 'Send investor deck' in first_hidden and 'Review PR #42' in first_hidden
+    assert 'Call dentist' in second_hidden
     assert db.get(unrouted['id'])['status'] == 'active'
     assert db.get(unrouted['id'])['claim_token'] is None
     logs = db.list_wake_logs()
@@ -488,9 +494,10 @@ def test_watcher_polling_establishes_baseline_and_wakes_only_on_file_change(tmp_
     r3 = runner.tick()
     assert r3['injected'] == 1
     assert len(ctx.calls) == 1
-    assert 'Monitor build_status.txt' in ctx.calls[0][0]
-
+    assert ctx.calls[0][0] == 'Butler check-in.'
     db = store_factory()
+    hidden = db.db.execute("SELECT payload FROM pending_wakes WHERE route_id='r-watch'").fetchone()['payload']
+    assert 'Monitor build_status.txt' in hidden and 'watch_change:' in hidden and 'digest' in hidden
     assert db.get(watch_item['id'])['status'] == 'active'
     db.close()
 
@@ -534,7 +541,11 @@ def test_non_negotiable_completion_daily_rollover_and_trigger_now(tmp_path, monk
     trig = runner.trigger_now()
     assert trig['ok'] is True
     assert trig['injected'] == 1
-    assert '30m mobility + walk' in ctx.calls[-1][0]
+    assert ctx.calls[-1][0] == 'Butler check-in.'
+    db = store_factory()
+    hidden = db.db.execute("SELECT payload FROM pending_wakes WHERE route_id='r-bound'").fetchone()['payload']
+    assert '30m mobility + walk' in hidden
+    db.close()
 
     # Mark completed today via butler_manage -> stamps completed_day
     done_resp = json.loads(ctx.tools['butler_manage']({'action': 'complete', 'id': nn_id}))

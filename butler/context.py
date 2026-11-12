@@ -270,6 +270,7 @@ def _render_responsibilities_block(
     local_dt: datetime,
     zone: str,
     persistence: str,
+    engagement: dict | None = None,
 ) -> list[str]:
     today_str = local_dt.strftime('%Y-%m-%d')
     done_today: list[str] = []
@@ -294,27 +295,31 @@ def _render_responsibilities_block(
             if raw.get('completed_day') == today_str or status == 'completed':
                 done_today.append(f'{title}{id_tag}')
             elif status != 'paused':
-                due_note = ''
+                due_note = ' (awaiting your decision: no follow-up scheduled)' if status == 'submitted' else ''
                 if deadline_dt is not None:
-                    due_note = f" (by {local_time(deadline_dt, zone).strftime('%H:%M')})"
+                    due_note += f" (by {local_time(deadline_dt, zone).strftime('%H:%M')})"
                 elif due_dt is not None:
-                    due_note = f" (next {local_time(due_dt, zone).strftime('%H:%M')})"
+                    due_note += f" (next {local_time(due_dt, zone).strftime('%H:%M')})"
                 open_today.append(f'{title}{due_note}{id_tag}')
             continue
 
-        if status in ('completed', 'paused'):
+        if status == 'completed':
             continue
         urgent_dt = deadline_dt or due_dt
         sort_ts = urgent_dt.timestamp() if urgent_dt is not None else far_future
-        status_rank = 0 if status == 'active' else 1
+        status_rank = 0 if status == 'active' else (1 if status == 'submitted' else 2)
         nudge_rank = -int(raw.get('nudge_count') or 0)
         when_parts: list[str] = []
         if kind != 'commitment':
             when_parts.append(kind)
-        if due_dt is not None:
+        if due_dt is not None and status != 'paused':
             when_parts.append(f"due {local_time(due_dt, zone).strftime('%Y-%m-%d %H:%M')}")
         if deadline_dt is not None:
             when_parts.append(f"deadline {local_time(deadline_dt, zone).strftime('%Y-%m-%d %H:%M')}")
+        if status == 'submitted':
+            when_parts.append('AWAITING YOUR DECISION: no next touch is scheduled, snooze/complete/stop it')
+        elif status == 'paused':
+            when_parts.append('PAUSED: no automatic follow-up scheduled, snooze/complete/stop it if this message updates it')
         meta_str = f" ({', '.join(when_parts)})" if when_parts else ''
         commitments.append(((status_rank, sort_ts, nudge_rank), f'{title}{meta_str}{id_tag}'))
 
@@ -340,10 +345,24 @@ def _render_responsibilities_block(
 
     directive_line = (
         'Proactive assistant directive: When the user shares a daily non-negotiable, commitment, task to follow up on, '
-        f'or open loop, record it via butler_create (you may omit due_at to let Butler auto-schedule based on persistence={persistence}). '
-        'When the user finishes or reschedules an item, update it immediately via butler_manage so Desktop UI and follow-up nudges stay in sync.'
+        f'or open loop, record it via butler_create (omit due_at to be woken right away, or pick the time yourself; persistence={persistence} is only an owner preference hint, never a schedule). '
+        'You own follow-up timing: after every nudge or reply, decide whether and when to come back and set it with butler_manage snooze (until=...). Items marked AWAITING YOUR DECISION will not wake again until you do. When the user finishes or reschedules an item, update it immediately via butler_manage.'
     )
-    return [nn_line, comm_line, directive_line]
+    carry_line = (
+        'After EVERY reply, silently decide: if they go quiet, should I come back to this, when, and how? '
+        'Anything open (you asked them something, you need them for a step, they are waiting on a result, a plan, '
+        'trip, deadline, promise, something stressful) means: in that same turn record it with butler_create or '
+        'set its next touch with butler_manage snooze, with a self-contained note (thread, what you need, what you '
+        'will say next). Pick the delay per situation: a minute or two when live and blocking, later for casual, '
+        'the natural moment for life stuff. Nothing open: schedule nothing and never mention the machinery. '
+        'Never end a turn on a bare question when the obvious continuation is something you can just do or schedule.'
+    )
+    lines = [nn_line, comm_line, directive_line, carry_line]
+    if engagement:
+        lines.append(
+            f"Engagement: {int(engagement.get('unanswered_wakes') or 0)} unanswered proactive nudge(s) since their last real message."
+        )
+    return lines
 
 
 def build_lifetime_awareness_context(
@@ -356,6 +375,7 @@ def build_lifetime_awareness_context(
     config_timezone: str = '',
     system_timezone: str | None = None,
     active_responsibilities: list[dict] | None = None,
+    engagement: dict | None = None,
 ) -> str | None:
     """Render per-turn live local time, session lifetime, and notification/style posture."""
     if not isinstance(settings, dict):
@@ -434,6 +454,7 @@ def build_lifetime_awareness_context(
                 local_dt=local_dt,
                 zone=zone,
                 persistence=persistence,
+                engagement=engagement,
             )
         )
     return '\n'.join(lines)

@@ -122,12 +122,16 @@ class StoreSchedulerTest(unittest.TestCase):
             s = ResponsibilityStore(Path(directory) / 'db')
             now = datetime(2026, 1, 1, tzinfo=timezone.utc)
             item = s.create('task', now, timezone_name='America/Chicago')
+            assert item is not None
             claim = s.claim_due(now)[0]
             self.assertTrue(s.pause(item['id']))
             self.assertFalse(s.claim_is_current(item['id'], claim['claim_token'], now))
             self.assertEqual(s.claim_due(now), [])
             self.assertTrue(s.snooze(item['id'], now + timedelta(hours=1)))
-            self.assertTrue(s.resume(item['id']))
+            active = s.get(item['id'])
+            assert active is not None
+            self.assertEqual(active['status'], 'active')
+            self.assertFalse(s.resume(item['id']))
             self.assertEqual(s.claim_due(now), [])
             self.assertEqual(len(s.claim_due(now + timedelta(hours=1))), 1)
             self.assertTrue(s.stop(item['id']))
@@ -407,5 +411,63 @@ def test_advance_followup_and_defer_claim_fencing_and_wake_logs(tmp_path):
         assert all_logs[-1]['outcome'] == 'deferred'
 
 
+def test_pending_wake_claim_lease_requeues_with_fencing(tmp_path):
+    from datetime import timedelta
+    store = ResponsibilityStore(tmp_path / 'pending-lease.sqlite3')
+    due = datetime(2026, 11, 11, 18, 0, tzinfo=timezone.utc)
+    wake_id = store.enqueue_pending_wake('route-a', 'sensitive prompt', due)
+    first = store.claim_pending_wake('route-a', due + timedelta(seconds=1))
+    assert first and first['id'] == wake_id
+    recovered = store.claim_pending_wake('route-a', due + timedelta(seconds=700))
+    assert recovered and recovered['id'] == wake_id
+    assert recovered['payload'] == 'sensitive prompt'
+    assert recovered['claim_token'] != first['claim_token']
+    assert not store.finish_pending_wake(wake_id, first['claim_token'], due + timedelta(seconds=701), visible_response=True)
+    assert store.finish_pending_wake(wake_id, recovered['claim_token'], due + timedelta(seconds=702), visible_response=True)
+    assert store.get_engagement()['unanswered_wakes'] == 1
+    store.close()
+
+
 if __name__ == '__main__':
     unittest.main()
+
+
+def test_snooze_resumes_a_paused_responsibility(tmp_path):
+    store = ResponsibilityStore(tmp_path / 'snooze-paused.sqlite3')
+    due = datetime(2026, 11, 11, 18, 0, tzinfo=timezone.utc)
+    item = store.create('Call dentist', due)
+    assert store.pause(item['id'])
+    assert store.snooze(item['id'], due + timedelta(hours=1))
+    assert store.get(item['id'])['status'] == 'active'
+    store.close()
+
+
+def test_legacy_pending_wakes_table_migrates_claim_lease_fields(tmp_path):
+    path = tmp_path / 'legacy-wakes.sqlite3'
+    db = sqlite3.connect(path)
+    db.execute(
+        "CREATE TABLE pending_wakes (id TEXT PRIMARY KEY, route_id TEXT NOT NULL, payload TEXT NOT NULL, "
+        "created_at TEXT NOT NULL, expires_at TEXT NOT NULL, state TEXT NOT NULL DEFAULT 'pending')"
+    )
+    db.commit()
+    db.close()
+    store = ResponsibilityStore(path)
+    columns = {row['name'] for row in store.db.execute('PRAGMA table_info(pending_wakes)').fetchall()}
+    assert {'claim_token', 'claim_until'} <= columns
+    store.close()
+
+
+def test_pending_wake_is_claimed_once_then_finalized(tmp_path):
+    from datetime import timedelta
+    store = ResponsibilityStore(tmp_path / 'pending.sqlite3')
+    due = datetime(2026, 11, 11, 18, 0, tzinfo=timezone.utc)
+    wake_id = store.enqueue_pending_wake('route-a', 'sensitive prompt', due)
+    assert wake_id
+    assert store.claim_pending_wake('route-b', due) is None
+    claimed = store.claim_pending_wake('route-a', due + timedelta(seconds=1))
+    assert claimed['id'] == wake_id and claimed['payload'] == 'sensitive prompt' and claimed['claim_token']
+    assert store.claim_pending_wake('route-a', due + timedelta(seconds=2)) is None
+    assert store.finish_pending_wake(wake_id, claimed['claim_token'], due + timedelta(seconds=3), visible_response=True)
+    assert store.get_engagement()['unanswered_wakes'] == 1
+    assert not store.finish_pending_wake(wake_id, claimed['claim_token'], due + timedelta(seconds=4), visible_response=True)
+    store.close()
